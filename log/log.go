@@ -14,7 +14,7 @@ func sprintf(t string, format string, args ...interface{}) string {
 }
 
 func printf(t string, format string, args ...interface{}) {
-	go fmt.Printf(sprintf(t, format, args...))
+	fmt.Printf(sprintf(t, format, args...))
 }
 
 func Infof(format string, args ...interface{}) {
