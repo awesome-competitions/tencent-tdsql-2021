@@ -39,7 +39,11 @@ func (t *Table) Sync(db *database.DB) error {
 	if err != nil {
 		return err
 	}
-	return t.insertInto(db, rows)
+	for _, row := range rows {
+		log.Info(row)
+	}
+	//return t.insertInto(db, rows)
+	return nil
 }
 
 func (t *Table) insertInto(db *database.DB, rows Rows) error {
@@ -58,7 +62,6 @@ func (t *Table) insertInto(db *database.DB, rows Rows) error {
 			return err
 		}
 		affected, _ := result.RowsAffected()
-		log.Infof("insert into %s.%s: %d\n", t.Database, t.Name, affected)
 		if affected < 500 {
 			break
 		}
@@ -104,7 +107,7 @@ func (t *Table) loadData() (Rows, error) {
 						rows = append(rows, row)
 					} else {
 						updateAtIndex := t.Meta.ColsIndex[consts.UpdateAtColumnName]
-						if exist[updateAtIndex].Compare(row[updateAtIndex]) > 0 {
+						if exist[updateAtIndex].Compare(row[updateAtIndex]) < 0 {
 							copy(exist, row)
 						}
 					}
