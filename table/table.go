@@ -46,9 +46,8 @@ func (t *Table) insertInto(db *database.DB, rows Rows) error {
 	offset := 0
 	buff := bytes.Buffer{}
 	for {
-		i := offset
 		buff.WriteString(fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name))
-		for ; i < util.Min(offset+consts.InsertBatch, rows.Len()); i++ {
+		for i := offset; i < util.Min(offset+consts.InsertBatch, rows.Len()); i++ {
 			buff.WriteString(fmt.Sprintf("(%s),", rows[i].String()))
 		}
 		buff.Truncate(buff.Len() - 1)
@@ -60,7 +59,7 @@ func (t *Table) insertInto(db *database.DB, rows Rows) error {
 		}
 		affected, _ := result.RowsAffected()
 		log.Infof("insert into %s.%s: %d\n", t.Database, t.Name, affected)
-		if i == rows.Len()-1 {
+		if affected < 500 {
 			break
 		}
 		offset += consts.InsertBatch
