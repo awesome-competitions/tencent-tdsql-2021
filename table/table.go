@@ -39,11 +39,7 @@ func (t *Table) Sync(db *database.DB) error {
 	if err != nil {
 		return err
 	}
-	for _, row := range rows {
-		log.Info(row)
-	}
-	//return t.insertInto(db, rows)
-	return nil
+	return t.insertInto(db, rows)
 }
 
 func (t *Table) insertInto(db *database.DB, rows Rows) error {
