@@ -1,7 +1,6 @@
 package file
 
 import (
-    "bytes"
     "io/ioutil"
     "os"
 )
@@ -19,16 +18,6 @@ func New(path string) (*File, error) {
 
 func (f *File) Name() string{
     return f.file.Name()
-}
-
-func (f *File) Read(buff *bytes.Buffer) error {
-    _, err := buff.ReadFrom(f.file)
-    return err
-}
-
-func (f *File) Write(buff *bytes.Buffer) error {
-    _, err := buff.WriteTo(f.file)
-    return err
 }
 
 func (f *File) ReadAll() ([]byte, error){
