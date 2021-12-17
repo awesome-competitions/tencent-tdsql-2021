@@ -55,6 +55,7 @@ func (t *Table) insertInto(db *database.DB, rows Rows) error {
 		buff.WriteString(";")
 		result, err := db.Exec(buff.String())
 		if err != nil {
+			log.Infof("err sql: %s\n", buff.String())
 			return err
 		}
 		affected, _ := result.RowsAffected()
