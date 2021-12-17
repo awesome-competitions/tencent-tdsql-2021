@@ -62,6 +62,7 @@ func (t *Table) insertInto(db *database.DB, rows Rows) error {
 		if i == rows.Len()-1 {
 			break
 		}
+		offset += consts.InsertBatch
 		buff.Reset()
 	}
 	return nil
