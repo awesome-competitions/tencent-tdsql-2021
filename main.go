@@ -51,43 +51,33 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	pool := make(chan *table.Table, 4)
 	initLimit := make(chan bool, 4)
-	limit := make(chan bool, 4)
-	for i := 0; i < cap(limit); i++ {
-		limit <- true
+	syncLimit := make(chan bool, 4)
+	for i := 0; i < cap(syncLimit); i++ {
+		syncLimit <- true
 		initLimit <- true
 	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(tables))
 	go func() {
 		for i := 0; i < len(tables); i++ {
 			_ = <-initLimit
 			index := i
 			go func() {
+				rows, err := tables[index].Init()
+				initLimit <- true
+				if err != nil {
+					return
+				}
+				_ = <-syncLimit
 				defer func() {
-					initLimit <- true
+					syncLimit <- true
 				}()
-				_ = tables[index].Init()
-				pool <- tables[index]
+				err = tables[index].Sync(rows)
+				if err != nil {
+					log.Error(err)
+				}
 			}()
-		}
-	}()
-	wg := sync.WaitGroup{}
-	wg.Add(len(tables))
-	go func() {
-		for {
-			select {
-			case t := <-pool:
-				_ = <-limit
-				go func() {
-					defer func() {
-						limit <- true
-						wg.Add(-1)
-					}()
-					if err = t.Sync(); err != nil {
-						log.Error(err)
-					}
-				}()
-			}
 		}
 	}()
 	wg.Wait()

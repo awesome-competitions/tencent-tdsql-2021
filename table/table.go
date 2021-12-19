@@ -22,7 +22,6 @@ type Table struct {
 	Meta     Meta
 	DB       *database.DB
 	Recover  *rver.Recover
-	Rows     Rows
 }
 
 type Data struct {
@@ -37,38 +36,34 @@ type Meta struct {
 	ColsType  map[string]Type
 }
 
-func (t *Table) Init() error {
+func (t *Table) Init() (Rows, error) {
 	err := t.initRecover()
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 	err = t.initMeta()
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 	if t.Recover.RowIndex < 0 {
 		log.Infof("sync %s.%s already synced, skipped!\n", t.Database, t.Name)
-		return nil
+		return nil, nil
 	}
 	log.Infof("sync %s.%s \n", t.Database, t.Name)
 	rows, err := t.loadData()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	t.Rows = rows
-	return nil
+	return rows, nil
 }
 
-func (t *Table) Sync() error {
-	if t.Rows.Len() == 0 {
+func (t *Table) Sync(rows Rows) error {
+	if rows.Len() == 0 {
 		return nil
 	}
-	defer func() {
-		t.Rows = nil
-	}()
-	return t.insertInto(t.Rows)
+	return nil
 }
 
 func (t *Table) insertInto(rows Rows) error {
@@ -179,7 +174,10 @@ func (t *Table) initMeta() error {
 		log.Error(err)
 		return err
 	}
-	_, err = t.DB.Exec(strings.ReplaceAll(string(schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database)))
+	sql := strings.ReplaceAll(string(schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database))
+	sql = strings.ReplaceAll(sql, "float", "float(32,16)")
+	sql = strings.ReplaceAll(sql, "double", "double(32,16)")
+	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
 		return err

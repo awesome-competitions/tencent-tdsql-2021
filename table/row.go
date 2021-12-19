@@ -60,7 +60,7 @@ func (r Row) Compare(or Row) bool {
 func (r Row) String() string {
 	str := ""
 	for i, v := range r {
-		if v.T == Char || v.T == Datetime {
+		if v.T == Char || v.T == Datetime || v.T == Float || v.T == Double {
 			str += "'" + v.S + "'"
 		} else {
 			str += v.S
