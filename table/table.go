@@ -79,11 +79,12 @@ func (t *Table) insertInto(rows Rows) error {
 			log.Infof("err sql: %s\n", buff.String())
 			return err
 		}
-		if rows.Len() < offset {
+		if rows.Len() <= offset {
 			break
 		}
 		buff.Reset()
 	}
+	log.Infof("table %d sync finished\n", t.ID)
 	return t.Recover.Make(-1)
 }
 
