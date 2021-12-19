@@ -22,6 +22,7 @@ type Table struct {
 	Meta     Meta
 	DB       *database.DB
 	Recover  *rver.Recover
+	Rows     Rows
 }
 
 type Data struct {
@@ -36,7 +37,7 @@ type Meta struct {
 	ColsType  map[string]Type
 }
 
-func (t *Table) Sync() error {
+func (t *Table) Init() error {
 	err := t.initRecover()
 	if err != nil {
 		log.Error(err)
@@ -56,7 +57,18 @@ func (t *Table) Sync() error {
 	if err != nil {
 		return err
 	}
-	return t.insertInto(rows)
+	t.Rows = rows
+	return nil
+}
+
+func (t *Table) Sync() error {
+	if t.Rows.Len() == 0 {
+		return nil
+	}
+	defer func() {
+		t.Rows = nil
+	}()
+	return t.insertInto(t.Rows)
 }
 
 func (t *Table) insertInto(rows Rows) error {

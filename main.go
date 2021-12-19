@@ -6,7 +6,6 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/table"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -48,30 +47,35 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	pool := make(chan bool, 4)
-	for i := 0; i < cap(pool); i++ {
-		pool <- true
+	pool := make(chan *table.Table, 4)
+	limit := make(chan bool, 4)
+	for i := 0; i < cap(limit); i++ {
+		limit <- true
 	}
-	var index int64 = -1
+	go func() {
+		for i := 0; i < len(tables); i++ {
+			_ = tables[i].Init()
+			pool <- tables[i]
+		}
+	}()
 	wg := sync.WaitGroup{}
 	wg.Add(len(tables))
-	for {
-		i := int(atomic.AddInt64(&index, 1))
-		if i >= len(tables) {
-			break
-		}
-		select {
-		case _ = <-pool:
-			go func() {
-				defer func() {
-					pool <- true
-					wg.Add(-1)
+	go func() {
+		for {
+			select {
+			case t := <-pool:
+				_ = <-limit
+				go func() {
+					defer func() {
+						limit <- true
+						wg.Add(-1)
+					}()
+					if err = t.Sync(); err != nil {
+						log.Error(err)
+					}
 				}()
-				if err = tables[i].Sync(); err != nil {
-					log.Error(err)
-				}
-			}()
+			}
 		}
-	}
+	}()
 	wg.Wait()
 }
