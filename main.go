@@ -48,14 +48,22 @@ func _main() {
 		log.Panic(err)
 	}
 	pool := make(chan *table.Table, 4)
+	initLimit := make(chan bool, 4)
 	limit := make(chan bool, 4)
 	for i := 0; i < cap(limit); i++ {
 		limit <- true
+		initLimit <- true
 	}
 	go func() {
 		for i := 0; i < len(tables); i++ {
-			_ = tables[i].Init()
-			pool <- tables[i]
+			_ = <-initLimit
+			go func() {
+				defer func() {
+					initLimit <- true
+				}()
+				_ = tables[i].Init()
+				pool <- tables[i]
+			}()
 		}
 	}()
 	wg := sync.WaitGroup{}
