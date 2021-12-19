@@ -93,9 +93,11 @@ func (t *Table) count() (int, error) {
 		return 0, err
 	}
 	total := 0
-	err = rows.Scan(&total)
-	if err != nil {
-		return 0, err
+	if rows.Next() {
+		err = rows.Scan(&total)
+		if err != nil {
+			return 0, err
+		}
 	}
 	return total, nil
 }
