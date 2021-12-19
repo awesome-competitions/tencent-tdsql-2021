@@ -18,7 +18,7 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	}
 	db.SetConnMaxIdleTime(60 * time.Second)
 	db.SetMaxIdleConns(4)
-	db.SetMaxOpenConns(16)
+	db.SetMaxOpenConns(64)
 	return &DB{
 		db: db,
 	}, nil

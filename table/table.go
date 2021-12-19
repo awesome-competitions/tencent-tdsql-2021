@@ -48,10 +48,10 @@ func (t *Table) Sync() error {
 		return err
 	}
 	if t.Recover.RowIndex < 0 {
-		log.Infof("table %d already synced, skipped!\n", t.ID)
+		log.Infof("sync %s.%s already synced, skipped!\n", t.Database, t.Name)
 		return nil
 	}
-	log.Infof("sync database %s, table %s \n", t.Database, t.Name)
+	log.Infof("sync %s.%s \n", t.Database, t.Name)
 	rows, err := t.loadData()
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (t *Table) insertInto(rows Rows) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("table %d sync start from offset %d\n", t.ID, offset)
+	log.Infof("%s.%s start sync from offset %d\n", t.Database, t.Name, offset)
 	for {
 		buff.WriteString(fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name))
 		for i := offset; i < util.Min(offset+consts.InsertBatch, rows.Len()); i++ {
@@ -76,16 +76,15 @@ func (t *Table) insertInto(rows Rows) error {
 		buff.WriteString(";")
 		_, err := t.DB.Exec(buff.String())
 		if err != nil {
-			log.Infof("err sql: %s\n", buff.String())
+			log.Infof("%s.%s err sql: %s\n", t.Database, t.Name, buff.String())
 			return err
 		}
-		log.Infof("table %d sync offset %d\n", t.ID, offset)
 		if rows.Len() <= offset {
 			break
 		}
 		buff.Reset()
 	}
-	log.Infof("table %d sync finished\n", t.ID)
+	log.Infof("%s.%s sync finished\n", t.ID, t.Name)
 	return t.Recover.Make(-1)
 }
 
