@@ -65,11 +65,11 @@ func _main() {
 			index := i
 			go func() {
 				rows, err := tables[index].Init()
-				initLimit <- true
 				if err != nil {
-					return
+					log.Error(err)
 				}
 				_ = <-syncLimit
+				initLimit <- true
 				defer func() {
 					syncLimit <- true
 					wg.Add(-1)
