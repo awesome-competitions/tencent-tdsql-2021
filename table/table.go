@@ -79,6 +79,7 @@ func (t *Table) insertInto(rows Rows) error {
 			log.Infof("err sql: %s\n", buff.String())
 			return err
 		}
+		log.Infof("table %d sync offset %d\n", t.ID, offset)
 		if rows.Len() <= offset {
 			break
 		}
