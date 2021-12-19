@@ -35,7 +35,7 @@ func init() {
 func main() {
 	start := time.Now().UnixNano()
 	_main()
-	log.Infof("time-consuming %dms", (time.Now().UnixNano()-start)/1e6)
+	log.Infof("time-consuming %dms\n", (time.Now().UnixNano()-start)/1e6)
 }
 
 func _main() {
