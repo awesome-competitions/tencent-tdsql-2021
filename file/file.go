@@ -9,8 +9,8 @@ type File struct {
 	file *os.File
 }
 
-func New(path string) (*File, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, os.FileMode(0766))
+func New(path string, flag int) (*File, error) {
+	file, err := os.OpenFile(path, flag, os.FileMode(0766))
 	return &File{
 		file: file,
 	}, err

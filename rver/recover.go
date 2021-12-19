@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/ainilili/tdsql-competition/file"
 	"io"
+	"os"
 )
 
 type Recover struct {
@@ -12,7 +13,7 @@ type Recover struct {
 }
 
 func New(path string) (*Recover, error) {
-	f, err := file.New(path)
+	f, err := file.New(path, os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return nil, err
 	}

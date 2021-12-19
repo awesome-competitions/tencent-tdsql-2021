@@ -6,6 +6,7 @@ import (
 	"github.com/ainilili/tdsql-competition/parser"
 	"github.com/ainilili/tdsql-competition/util"
 	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -28,12 +29,12 @@ func ParseTables(db *database.DB, dataPath string) ([]*Table, error) {
 			if err != nil {
 				return nil, err
 			}
-			database := util.ParseName(databaseFile.Name())
+			dbName := util.ParseName(databaseFile.Name())
 			dataFiles := map[string]*file.File{}
 			schemaFiles := map[string]*file.File{}
 			fileKeys := make([]string, 0)
 			for _, tableFile := range tableFiles {
-				f, err := file.New(util.AssemblePath(dataPath, dataSourceFile.Name(), databaseFile.Name(), tableFile.Name()))
+				f, err := file.New(util.AssemblePath(dataPath, dataSourceFile.Name(), databaseFile.Name(), tableFile.Name()), os.O_RDONLY)
 				if err != nil {
 					return nil, err
 				}
@@ -49,13 +50,13 @@ func ParseTables(db *database.DB, dataPath string) ([]*Table, error) {
 				schema := schemaFiles[k]
 				data := dataFiles[k]
 				tableName := util.ParseName(data.Name())
-				tableKey := database + ":" + tableName
+				tableKey := dbName + ":" + tableName
 				t, ok := tableMap[tableKey]
 				if !ok {
 					t = &Table{
 						ID:       tableId,
 						Name:     tableName,
-						Database: database,
+						Database: dbName,
 						Data:     make([]Data, 0),
 						Schema:   schema,
 						DB:       db,
