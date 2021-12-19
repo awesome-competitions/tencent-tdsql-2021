@@ -51,8 +51,9 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	initLimit := make(chan bool, 4)
-	syncLimit := make(chan bool, 4)
+	batch := 3
+	initLimit := make(chan bool, batch)
+	syncLimit := make(chan bool, batch)
 	for i := 0; i < cap(syncLimit); i++ {
 		syncLimit <- true
 		initLimit <- true
