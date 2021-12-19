@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/log"
+	"github.com/ainilili/tdsql-competition/pprof"
 	"github.com/ainilili/tdsql-competition/table"
 	"sync"
 	"time"
@@ -39,6 +40,9 @@ func main() {
 }
 
 func _main() {
+	go func() {
+		_ = pprof.StartPprofServer()
+	}()
 	db, err := database.New(*dstIP, *dstPort, *dstUser, *dstPassword)
 	if err != nil {
 		log.Panic(err)
@@ -57,12 +61,13 @@ func _main() {
 	go func() {
 		for i := 0; i < len(tables); i++ {
 			_ = <-initLimit
+			index := i
 			go func() {
 				defer func() {
 					initLimit <- true
 				}()
-				_ = tables[i].Init()
-				pool <- tables[i]
+				_ = tables[index].Init()
+				pool <- tables[index]
 			}()
 		}
 	}()
