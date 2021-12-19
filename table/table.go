@@ -65,6 +65,7 @@ func (t *Table) insertInto(rows Rows) error {
 	if err != nil {
 		return err
 	}
+	log.Infof("table %d sync start from offset %d\n", t.ID, offset)
 	for {
 		buff.WriteString(fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name))
 		for i := offset; i < util.Min(offset+consts.InsertBatch, rows.Len()); i++ {
