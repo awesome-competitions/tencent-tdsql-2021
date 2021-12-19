@@ -1,13 +1,10 @@
 package table
 
 import (
-	"errors"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
+	"github.com/ainilili/tdsql-competition/parser"
 	"github.com/ainilili/tdsql-competition/util"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	_ "github.com/pingcap/tidb/types/parser_driver"
 	"io/ioutil"
 	"strings"
 )
@@ -78,31 +75,17 @@ func ParseTables(db *database.DB, dataPath string) ([]*Table, error) {
 }
 
 func parseTableMeta(sql string) (*Meta, error) {
-	p := parser.New()
-	stmt, _, err := p.Parse(sql, "", "")
-	if err != nil {
-		return nil, err
-	}
-	tableStmt, ok := stmt[0].(*ast.CreateTableStmt)
-	if !ok {
-		return nil, errors.New("sql schema invalid. ")
-	}
+	stmt := parser.ParseTableStmt(sql)
 	cols := make([]string, 0)
-	keys := make([]string, 0)
 	colsIndex := map[string]int{}
 	colsType := map[string]Type{}
-	for i, col := range tableStmt.Cols {
-		cols = append(cols, col.Name.String())
-		colsIndex[col.Name.String()] = i
-		colsType[col.Name.String()] = SqlTypeMapping[col.Tp.Tp]
-	}
-	for _, constraint := range tableStmt.Constraints {
-		for _, key := range constraint.Keys {
-			keys = append(keys, key.Column.Name.String())
-		}
+	for i, col := range stmt.Cols {
+		cols = append(cols, col.Name)
+		colsIndex[col.Name] = i
+		colsType[col.Name] = SqlTypeMapping[col.Type]
 	}
 	return &Meta{
-		Keys:      keys,
+		Keys:      stmt.Keys,
 		Cols:      cols,
 		ColsIndex: colsIndex,
 		ColsType:  colsType,

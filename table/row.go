@@ -1,7 +1,6 @@
 package table
 
 import (
-	"github.com/pingcap/parser/mysql"
 	"strconv"
 )
 
@@ -16,12 +15,12 @@ const (
 	Datetime
 )
 
-var SqlTypeMapping = map[byte]Type{
-	mysql.TypeLonglong: Bigint,
-	mysql.TypeDouble:   Double,
-	mysql.TypeFloat:    Double,
-	mysql.TypeString:   Char,
-	mysql.TypeDatetime: Datetime,
+var SqlTypeMapping = map[string]Type{
+	"bigint":   Bigint,
+	"double":   Double,
+	"float":    Double,
+	"char":     Char,
+	"datetime": Datetime,
 }
 
 var TypeParser = map[Type]func(str string) interface{}{
