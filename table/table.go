@@ -84,7 +84,7 @@ func (t *Table) insertInto(rows Rows) error {
 		}
 		buff.Reset()
 	}
-	log.Infof("%s.%s sync finished\n", t.ID, t.Name)
+	log.Infof("%s.%s sync finished\n", t.Database, t.Name)
 	return t.Recover.Make(-1)
 }
 
