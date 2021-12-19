@@ -72,6 +72,7 @@ func _main() {
 				_ = <-syncLimit
 				defer func() {
 					syncLimit <- true
+					wg.Add(-1)
 				}()
 				err = tables[index].Sync(rows)
 				if err != nil {
