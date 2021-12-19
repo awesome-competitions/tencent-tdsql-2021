@@ -63,7 +63,7 @@ func (t *Table) Sync(rows Rows) error {
 	if rows.Len() == 0 {
 		return nil
 	}
-	return nil
+	return t.insertInto(rows)
 }
 
 func (t *Table) insertInto(rows Rows) error {
