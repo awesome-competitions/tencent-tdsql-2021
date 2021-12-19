@@ -37,3 +37,11 @@ func (f *File) ReadAll() ([]byte, error) {
 func (f *File) Sync() error {
 	return f.file.Sync()
 }
+
+func (f *File) Size() int64 {
+	info, err := f.file.Stat()
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}

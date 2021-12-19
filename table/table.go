@@ -114,7 +114,8 @@ func (t *Table) loadData() (Rows, error) {
 	row := make(Row, 0, 5)
 	rows := make(Rows, 0)
 	index := map[string]Row{}
-	for _, data := range t.Data {
+	for i, data := range t.Data {
+		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.Data.Size())
 		byteArr, err := data.Data.ReadAll()
 		if err != nil {
 			return nil, err
