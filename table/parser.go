@@ -2,6 +2,7 @@ package table
 
 import (
 	"errors"
+	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/util"
 	"github.com/pingcap/parser"
@@ -11,12 +12,13 @@ import (
 	"strings"
 )
 
-func ParseTables(dataPath string) ([]*Table, error) {
+func ParseTables(db *database.DB, dataPath string) ([]*Table, error) {
 	dataSourceFiles, err := ioutil.ReadDir(dataPath)
 	if err != nil {
 		return nil, err
 	}
 	tables := make([]*Table, 0)
+	tableId := 1
 	tableMap := map[string]*Table{}
 	for _, dataSourceFile := range dataSourceFiles {
 		databaseFiles, err := ioutil.ReadDir(util.AssemblePath(dataPath, dataSourceFile.Name()))
@@ -54,11 +56,14 @@ func ParseTables(dataPath string) ([]*Table, error) {
 				t, ok := tableMap[tableKey]
 				if !ok {
 					t = &Table{
+						ID:       tableId,
 						Name:     tableName,
 						Database: database,
 						Data:     make([]Data, 0),
 						Schema:   schema,
+						DB:       db,
 					}
+					tableId++
 					tables = append(tables, t)
 					tableMap[tableKey] = t
 				}

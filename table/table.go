@@ -7,17 +7,21 @@ import (
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
+	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
 	"sort"
 	"strings"
 )
 
 type Table struct {
+	ID       int
 	Name     string
 	Database string
 	Data     []Data
 	Schema   *file.File
 	Meta     Meta
+	DB       *database.DB
+	Recover  *rver.Recover
 }
 
 type Data struct {
@@ -32,39 +36,67 @@ type Meta struct {
 	ColsType  map[string]Type
 }
 
-func (t *Table) Sync(db *database.DB) error {
-	t.initMeta(db)
+func (t *Table) Sync() error {
+	err := t.initRecover()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	err = t.initMeta()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if t.Recover.RowIndex < 0 {
+		log.Infof("table %d already synced, skipped!\n", t.ID)
+		return nil
+	}
 	log.Infof("sync database %s, table %s \n", t.Database, t.Name)
 	rows, err := t.loadData()
 	if err != nil {
 		return err
 	}
-	return t.insertInto(db, rows)
+	return t.insertInto(rows)
 }
 
-func (t *Table) insertInto(db *database.DB, rows Rows) error {
-	offset := 0
+func (t *Table) insertInto(rows Rows) error {
 	buff := bytes.Buffer{}
+	offset, err := t.count()
+	if err != nil {
+		return err
+	}
 	for {
 		buff.WriteString(fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name))
 		for i := offset; i < util.Min(offset+consts.InsertBatch, rows.Len()); i++ {
 			buff.WriteString(fmt.Sprintf("(%s),", rows[i].String()))
 		}
+		offset += consts.InsertBatch
 		buff.Truncate(buff.Len() - 1)
 		buff.WriteString(";")
-		result, err := db.Exec(buff.String())
+		_, err := t.DB.Exec(buff.String())
 		if err != nil {
 			log.Infof("err sql: %s\n", buff.String())
 			return err
 		}
-		affected, _ := result.RowsAffected()
-		if affected < 500 {
+		if rows.Len() < offset {
 			break
 		}
-		offset += consts.InsertBatch
 		buff.Reset()
 	}
-	return nil
+	return t.Recover.Make(-1)
+}
+
+func (t *Table) count() (int, error) {
+	rows, err := t.DB.Query(fmt.Sprintf("SELECT count(0) FROM %s.%s", t.Database, t.Name))
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	err = rows.Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (t *Table) loadData() (Rows, error) {
@@ -120,26 +152,40 @@ func (t *Table) loadData() (Rows, error) {
 	return rows, nil
 }
 
-func (t *Table) initMeta(db *database.DB) {
+func (t *Table) initMeta() error {
 	schema, err := t.Schema.ReadAll()
 	if err != nil {
 		log.Error(err)
-		return
+		return err
 	}
-	_, err = db.Exec(fmt.Sprintf(consts.CreateDatabaseSqlTemplate, t.Database))
+	_, err = t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
 	if err != nil {
 		log.Error(err)
-		return
+		return err
 	}
-	_, err = db.Exec(strings.ReplaceAll(string(schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database)))
+	_, err = t.DB.Exec(strings.ReplaceAll(string(schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database)))
 	if err != nil {
 		log.Error(err)
-		return
+		return err
 	}
 	meta, err := parseTableMeta(string(schema))
 	if err != nil {
 		log.Error(err)
-		return
+		return err
 	}
 	t.Meta = *meta
+	return nil
+}
+
+func (t *Table) initRecover() error {
+	r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
+	if err != nil {
+		return err
+	}
+	err = r.Load()
+	if err != nil {
+		return err
+	}
+	t.Recover = r
+	return nil
 }
