@@ -10,7 +10,9 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
+	"sort"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -52,7 +54,6 @@ func (t *Table) Init() (Rows, error) {
 		log.Infof("sync %s.%s already synced, skipped!\n", t.Database, t.Name)
 		return nil, nil
 	}
-	log.Infof("sync %s.%s \n", t.Database, t.Name)
 	rows, err := t.loadData()
 	if err != nil {
 		return nil, err
@@ -64,7 +65,11 @@ func (t *Table) Sync(rows Rows) error {
 	if rows.Len() == 0 {
 		return nil
 	}
-	return t.insertInto(rows)
+	start := time.Now().UnixNano()
+	err := t.insertInto(rows)
+	log.Info((time.Now().UnixNano() - start) / 1e6)
+
+	return err
 }
 
 func (t *Table) insertInto(rows Rows) error {
@@ -184,15 +189,15 @@ func (t *Table) loadData() (Rows, error) {
 			}
 		}
 	}
-	//rows := make(Rows, l.Len())
-	//j := 0
-	//for i := l.Front(); i != nil; i = i.Next() {
-	//	rows[j] = i.Value.(Row)
-	//	j++
-	//}
-	//sort.Sort(&rows)
-	select {}
-	return nil, nil
+	rows := make(Rows, l.Len())
+	j := 0
+	for i := l.Front(); i != nil; i = i.Next() {
+		rows[j] = i.Value.(Row)
+		j++
+	}
+	sort.Sort(&rows)
+	rows = rows[:1000000]
+	return rows, nil
 }
 
 func (t *Table) initMeta() error {
