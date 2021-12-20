@@ -2,6 +2,7 @@ package table
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/database"
@@ -9,8 +10,8 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
-	"sort"
 	"strings"
+	"unsafe"
 )
 
 type Table struct {
@@ -110,10 +111,31 @@ func (t *Table) count() (int, error) {
 	return total, nil
 }
 
+//func (t *Table) loadData() (Rows, error) {
+//	rows := list.New()
+//	for i, data := range t.Data {
+//		byteArr, err := data.Data.ReadAll()
+//		if err != nil {
+//			return nil, err
+//		}
+//		log.Infof("sync %s.%s, data %d, size %d, len %d\n", t.Database, t.Name, i, data.Data.Size(), len(byteArr))
+//		start := 0
+//		for i, b := range byteArr {
+//			if b == consts.LF {
+//				rows.PushBack(byteArr[start:i])
+//				start = i + 1
+//			}
+//		}
+//	}
+//	log.Infof("list size %d\n", rows.Len())
+//	select {}
+//	return nil, nil
+//}
+
 func (t *Table) loadData() (Rows, error) {
-	row := make(Row, 0, 5)
-	rows := make(Rows, 0)
-	index := map[string]Row{}
+	row := make(Row, len(t.Meta.Cols))
+	l := list.New()
+	maps := map[string]Row{}
 	for i, data := range t.Data {
 		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.Data.Size())
 		byteArr, err := data.Data.ReadAll()
@@ -121,17 +143,19 @@ func (t *Table) loadData() (Rows, error) {
 			return nil, err
 		}
 		buf := bytes.Buffer{}
-		i := 0
-		for _, b := range byteArr {
+		index := 0
+		start := 0
+		for i, b := range byteArr {
 			if b == consts.COMMA || b == consts.LF {
-				tp := t.Meta.ColsType[t.Meta.Cols[i]]
-				i++
-				source := buf.String()
-				row = append(row, Value{
+				tp := t.Meta.ColsType[t.Meta.Cols[index]]
+				bs := byteArr[start:i]
+				source := *(*string)(unsafe.Pointer(&bs))
+				row[index] = Value{
 					T: tp,
 					V: TypeParser[tp](source),
 					S: source,
-				})
+				}
+				index++
 				if b == consts.LF {
 					buf.Reset()
 					tags := t.Meta.Keys
@@ -141,83 +165,35 @@ func (t *Table) loadData() (Rows, error) {
 					for _, tag := range tags {
 						buf.WriteString(row[t.Meta.ColsIndex[tag]].S + ":")
 					}
-					exist, ok := index[buf.String()]
+					exist, ok := maps[buf.String()]
 					if !ok {
-						index[buf.String()] = row
-						rows = append(rows, row)
+						maps[buf.String()] = row
+						l.PushBack(row)
 					} else {
 						updateAtIndex := t.Meta.ColsIndex[consts.UpdateAtColumnName]
 						if exist[updateAtIndex].Compare(row[updateAtIndex]) < 0 {
 							copy(exist, row)
 						}
 					}
-					row = make(Row, 0, 5)
-					i = 0
+					row = make(Row, len(t.Meta.Cols))
+					index = 0
 				}
 				buf.Reset()
+				start = i + 1
 				continue
 			}
-			buf.WriteByte(b)
 		}
 	}
-	sort.Sort(&rows)
-	return rows, nil
+	//rows := make(Rows, l.Len())
+	//j := 0
+	//for i := l.Front(); i != nil; i = i.Next() {
+	//	rows[j] = i.Value.(Row)
+	//	j++
+	//}
+	//sort.Sort(&rows)
+	select {}
+	return nil, nil
 }
-
-//
-//func (t *Table) loadData() (Rows, error) {
-//	row := make(Row, 0, 5)
-//	rows := make(Rows, 0)
-//	index := map[string]Row{}
-//	for i, data := range t.Data {
-//		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.Data.Size())
-//		byteArr, err := data.Data.ReadAll()
-//		if err != nil {
-//			return nil, err
-//		}
-//		buf := bytes.Buffer{}
-//		i := 0
-//		for _, b := range byteArr {
-//			if b == consts.COMMA || b == consts.LF {
-//				tp := t.Meta.ColsType[t.Meta.Cols[i]]
-//				i++
-//				source := buf.String()
-//				row = append(row, Value{
-//					T: tp,
-//					V: TypeParser[tp](source),
-//					S: source,
-//				})
-//				if b == consts.LF {
-//					buf.Reset()
-//					tags := t.Meta.Keys
-//					if len(tags) == 0 {
-//						tags = t.Meta.Cols[:len(t.Meta.Cols)-1]
-//					}
-//					for _, tag := range tags {
-//						buf.WriteString(row[t.Meta.ColsIndex[tag]].S + ":")
-//					}
-//					exist, ok := index[buf.String()]
-//					if !ok {
-//						index[buf.String()] = row
-//						rows = append(rows, row)
-//					} else {
-//						updateAtIndex := t.Meta.ColsIndex[consts.UpdateAtColumnName]
-//						if exist[updateAtIndex].Compare(row[updateAtIndex]) < 0 {
-//							copy(exist, row)
-//						}
-//					}
-//					row = make(Row, 0, 5)
-//					i = 0
-//				}
-//				buf.Reset()
-//				continue
-//			}
-//			buf.WriteByte(b)
-//		}
-//	}
-//	sort.Sort(&rows)
-//	return rows, nil
-//}
 
 func (t *Table) initMeta() error {
 	schema, err := t.Schema.ReadAll()

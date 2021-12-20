@@ -47,6 +47,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	//tables = tables[:1]
 	batch := 2
 	initLimit := make(chan bool, batch)
 	syncLimit := make(chan bool, batch)
