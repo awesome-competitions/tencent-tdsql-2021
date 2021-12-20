@@ -39,9 +39,9 @@ func ParseTables(db *database.DB, dataPath string) ([]*Table, error) {
 					return nil, err
 				}
 				fileKey := tableFile.Name()[:len(tableFile.Name())-4]
-				fileKeys = append(fileKeys, fileKey)
 				if strings.HasSuffix(tableFile.Name(), ".csv") {
 					dataFiles[fileKey] = f
+					fileKeys = append(fileKeys, fileKey)
 				} else {
 					schemaFiles[fileKey] = f
 				}

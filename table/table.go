@@ -164,6 +164,61 @@ func (t *Table) loadData() (Rows, error) {
 	return rows, nil
 }
 
+//
+//func (t *Table) loadData() (Rows, error) {
+//	row := make(Row, 0, 5)
+//	rows := make(Rows, 0)
+//	index := map[string]Row{}
+//	for i, data := range t.Data {
+//		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.Data.Size())
+//		byteArr, err := data.Data.ReadAll()
+//		if err != nil {
+//			return nil, err
+//		}
+//		buf := bytes.Buffer{}
+//		i := 0
+//		for _, b := range byteArr {
+//			if b == consts.COMMA || b == consts.LF {
+//				tp := t.Meta.ColsType[t.Meta.Cols[i]]
+//				i++
+//				source := buf.String()
+//				row = append(row, Value{
+//					T: tp,
+//					V: TypeParser[tp](source),
+//					S: source,
+//				})
+//				if b == consts.LF {
+//					buf.Reset()
+//					tags := t.Meta.Keys
+//					if len(tags) == 0 {
+//						tags = t.Meta.Cols[:len(t.Meta.Cols)-1]
+//					}
+//					for _, tag := range tags {
+//						buf.WriteString(row[t.Meta.ColsIndex[tag]].S + ":")
+//					}
+//					exist, ok := index[buf.String()]
+//					if !ok {
+//						index[buf.String()] = row
+//						rows = append(rows, row)
+//					} else {
+//						updateAtIndex := t.Meta.ColsIndex[consts.UpdateAtColumnName]
+//						if exist[updateAtIndex].Compare(row[updateAtIndex]) < 0 {
+//							copy(exist, row)
+//						}
+//					}
+//					row = make(Row, 0, 5)
+//					i = 0
+//				}
+//				buf.Reset()
+//				continue
+//			}
+//			buf.WriteByte(b)
+//		}
+//	}
+//	sort.Sort(&rows)
+//	return rows, nil
+//}
+
 func (t *Table) initMeta() error {
 	schema, err := t.Schema.ReadAll()
 	if err != nil {
