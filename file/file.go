@@ -16,18 +16,30 @@ func New(path string, flag int) (*File, error) {
 	}, err
 }
 
+func (f *File) Seek(offset int64, whence int) (int64, error) {
+	return f.file.Seek(offset, whence)
+}
+
 func (f *File) Name() string {
 	return f.file.Name()
 }
 
-func (f *File) Write(offset int64, bytes []byte) error {
+func (f *File) WriteAt(offset int64, bytes []byte) error {
 	_, err := f.file.WriteAt(bytes, offset)
 	return err
 }
 
-func (f *File) Read(offset int64, bytes []byte) error {
+func (f *File) Write(bytes []byte) (int, error) {
+	return f.file.Write(bytes)
+}
+
+func (f *File) ReadAt(offset int64, bytes []byte) error {
 	_, err := f.file.ReadAt(bytes, offset)
 	return err
+}
+
+func (f *File) Read(bytes []byte) (int, error) {
+	return f.file.Read(bytes)
 }
 
 func (f *File) ReadAll() ([]byte, error) {

@@ -23,7 +23,7 @@ func New(path string) (*Recover, error) {
 func (r *Recover) Make(rowIndex int32) error {
 	data := make([]byte, 4)
 	binary.BigEndian.PutUint32(data, uint32(rowIndex))
-	err := r.file.Write(0, data)
+	err := r.file.WriteAt(0, data)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func (r *Recover) Make(rowIndex int32) error {
 
 func (r *Recover) Load() error {
 	data := make([]byte, 4)
-	err := r.file.Read(0, data)
+	err := r.file.ReadAt(0, data)
 	if err != nil {
 		if err == io.EOF {
 			return nil

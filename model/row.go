@@ -1,7 +1,9 @@
-package table
+package model
 
 import (
+	"bytes"
 	"strconv"
+	"unsafe"
 )
 
 type Type int
@@ -44,11 +46,14 @@ var TypeParser = map[Type]func(str string) interface{}{
 	},
 }
 
-type Row []Value
+type Row struct {
+	Values []Value
+	Buffer bytes.Buffer
+}
 
-func (r Row) Compare(or Row) bool {
-	for i, v := range r {
-		result := v.Compare(or[i])
+func (r Row) Compare(or interface{}) bool {
+	for i, v := range r.Values {
+		result := v.Compare(or.(Row).Values[i])
 		if result != 0 {
 			return result > 0
 		}
@@ -57,28 +62,17 @@ func (r Row) Compare(or Row) bool {
 }
 
 func (r Row) String() string {
-	str := ""
-	for i, v := range r {
-		if v.T == Char || v.T == Datetime {
-			str += "'" + v.S + "'"
-		} else {
-			str += v.S
-		}
-		if i < len(r)-1 {
-			str += ","
-		}
-	}
-	return str
+	return *(*string)(unsafe.Pointer(&r.Buffer))
 }
 
-type Rows []Row
+type Rows []*Row
 
 func (rs *Rows) Len() int {
 	return len(*rs) //
 }
 
 func (rs *Rows) Less(i, j int) bool {
-	return !(*rs)[i].Compare((*rs)[j])
+	return !(*rs)[i].Compare(*(*rs)[j])
 }
 
 func (rs *Rows) Swap(i, j int) {
@@ -89,6 +83,10 @@ type Value struct {
 	T Type
 	V interface{}
 	S string
+}
+
+func (v Value) Equals(o Value) bool {
+	return v.S == o.S
 }
 
 func (v Value) Compare(o Value) int {

@@ -5,9 +5,8 @@ import (
 	"container/list"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
-	"github.com/ainilili/tdsql-competition/database"
-	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
+	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
 	"sort"
@@ -16,36 +15,13 @@ import (
 	"unsafe"
 )
 
-type Table struct {
-	ID       int
-	Name     string
-	Database string
-	Data     []Data
-	Schema   *file.File
-	Meta     Meta
-	DB       *database.DB
-	Recover  *rver.Recover
-}
-
-type Data struct {
-	DataSource string
-	Data       *file.File
-}
-
-type Meta struct {
-	Keys      []string
-	Cols      []string
-	ColsIndex map[string]int
-	ColsType  map[string]Type
-}
-
-func (t *Table) Init() (Rows, error) {
-	err := t.initRecover()
+func Init(t *model.Table) (Rows, error) {
+	err := initRecover(t)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-	err = t.initMeta()
+	err = initMeta(t)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -54,27 +30,27 @@ func (t *Table) Init() (Rows, error) {
 		log.Infof("sync %s.%s already synced, skipped!\n", t.Database, t.Name)
 		return nil, nil
 	}
-	rows, err := t.loadData()
+	rows, err := loadData(t)
 	if err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (t *Table) Sync(rows Rows) error {
+func Sync(t *model.Table, rows Rows) error {
 	if rows.Len() == 0 {
 		return nil
 	}
 	start := time.Now().UnixNano()
-	err := t.insertInto(rows)
+	err := insertInto(t, rows)
 	log.Info((time.Now().UnixNano() - start) / 1e6)
 
 	return err
 }
 
-func (t *Table) insertInto(rows Rows) error {
+func insertInto(t *model.Table, rows Rows) error {
 	buff := bytes.Buffer{}
-	offset, err := t.count()
+	offset, err := count(t)
 	if err != nil {
 		return err
 	}
@@ -101,7 +77,7 @@ func (t *Table) insertInto(rows Rows) error {
 	return t.Recover.Make(-1)
 }
 
-func (t *Table) count() (int, error) {
+func count(t *model.Table) (int, error) {
 	rows, err := t.DB.Query(fmt.Sprintf("SELECT count(0) FROM %s.%s", t.Database, t.Name))
 	if err != nil {
 		return 0, err
@@ -116,34 +92,13 @@ func (t *Table) count() (int, error) {
 	return total, nil
 }
 
-//func (t *Table) loadData() (Rows, error) {
-//	rows := list.New()
-//	for i, data := range t.Data {
-//		byteArr, err := data.Data.ReadAll()
-//		if err != nil {
-//			return nil, err
-//		}
-//		log.Infof("sync %s.%s, data %d, size %d, len %d\n", t.Database, t.Name, i, data.Data.Size(), len(byteArr))
-//		start := 0
-//		for i, b := range byteArr {
-//			if b == consts.LF {
-//				rows.PushBack(byteArr[start:i])
-//				start = i + 1
-//			}
-//		}
-//	}
-//	log.Infof("list size %d\n", rows.Len())
-//	select {}
-//	return nil, nil
-//}
-
-func (t *Table) loadData() (Rows, error) {
+func loadData(t *model.Table) (Rows, error) {
 	row := make(Row, len(t.Meta.Cols))
 	l := list.New()
 	maps := map[string]Row{}
-	for i, data := range t.Data {
-		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.Data.Size())
-		byteArr, err := data.Data.ReadAll()
+	for i, data := range t.Sources {
+		log.Infof("sync %s.%s, data %d, size %d\n", t.Database, t.Name, i, data.File.Size())
+		byteArr, err := data.File.ReadAll()
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +155,7 @@ func (t *Table) loadData() (Rows, error) {
 	return rows, nil
 }
 
-func (t *Table) initMeta() error {
+func initMeta(t *model.Table) error {
 	schema, err := t.Schema.ReadAll()
 	if err != nil {
 		log.Error(err)
@@ -228,7 +183,7 @@ func (t *Table) initMeta() error {
 	return nil
 }
 
-func (t *Table) initRecover() error {
+func initRecover(t *model.Table) error {
 	r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
 	if err != nil {
 		return err

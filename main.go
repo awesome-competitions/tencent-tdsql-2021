@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/log"
+	"github.com/ainilili/tdsql-competition/parser"
 	"github.com/ainilili/tdsql-competition/table"
 	"sync"
 	"time"
@@ -43,7 +44,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables, err := table.ParseTables(db, *dataPath)
+	tables, err := parser.ParseTables(db, *dataPath)
 	if err != nil {
 		log.Panic(err)
 	}
