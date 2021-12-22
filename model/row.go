@@ -23,7 +23,7 @@ func (t Type) IsString() bool {
 var SqlTypeMapping = map[string]Type{
 	"bigint":   Bigint,
 	"double":   Double,
-	"float":    Double,
+	"float":    Float,
 	"char":     Char,
 	"datetime": Datetime,
 }
