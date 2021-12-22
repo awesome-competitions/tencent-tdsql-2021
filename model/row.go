@@ -47,8 +47,10 @@ var TypeParser = map[Type]func(str string) interface{}{
 }
 
 type Row struct {
-	Values []Value
-	Buffer bytes.Buffer
+	Values   []Value
+	Buffer   bytes.Buffer
+	Key      string
+	UpdateAt string
 }
 
 func (r Row) Compare(or interface{}) bool {
@@ -80,45 +82,44 @@ func (rs *Rows) Swap(i, j int) {
 }
 
 type Value struct {
-	T Type
-	V interface{}
-	S string
+	Type  Type
+	Value interface{}
 }
 
 func (v Value) Equals(o Value) bool {
-	return v.S == o.S
+	return v.Value == o.Value
 }
 
 func (v Value) Compare(o Value) int {
-	switch v.T {
+	switch v.Type {
 	case Bigint:
-		if v.V.(int64) > o.V.(int64) {
+		if v.Value.(int64) > o.Value.(int64) {
 			return 1
-		} else if v.V.(int64) > o.V.(int64) {
+		} else if v.Value.(int64) > o.Value.(int64) {
 			return 0
 		} else {
 			return -1
 		}
 	case Double:
-		if v.V.(float64) > o.V.(float64) {
+		if v.Value.(float64) > o.Value.(float64) {
 			return 1
-		} else if v.V.(float64) > o.V.(float64) {
+		} else if v.Value.(float64) > o.Value.(float64) {
 			return 0
 		} else {
 			return -1
 		}
 	case Float:
-		if v.V.(float32) > o.V.(float32) {
+		if v.Value.(float32) > o.Value.(float32) {
 			return 1
-		} else if v.V.(float32) > o.V.(float32) {
+		} else if v.Value.(float32) > o.Value.(float32) {
 			return 0
 		} else {
 			return -1
 		}
 	case Char, Datetime:
-		if v.V.(string) > o.V.(string) {
+		if v.Value.(string) > o.Value.(string) {
 			return 1
-		} else if v.V.(string) > o.V.(string) {
+		} else if v.Value.(string) > o.Value.(string) {
 			return 0
 		} else {
 			return -1

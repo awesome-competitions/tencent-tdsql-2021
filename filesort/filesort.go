@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/file"
+	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"os"
 	"sort"
+	"sync"
 )
 
 type FileSorter struct {
+	sync.Mutex
 	sources []*fileBuffer
+	shards  []*fileBuffer
 	table   *model.Table
 }
 
@@ -27,82 +31,77 @@ func New(table *model.Table) (*FileSorter, error) {
 }
 
 func (fs *FileSorter) newShard(path string) (*fileBuffer, error) {
-	f, err := file.New("D:\\workspace\\tencent\\tmp\\"+path, os.O_CREATE|os.O_RDWR)
+	fs.Lock()
+	defer fs.Unlock()
+	f, err := file.New(path, os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return nil, err
 	}
-	return newFileBuffer(f, fs.table.Meta), nil
+	shard := newFileBuffer(f, fs.table.Meta)
+	fs.shards = append(fs.shards, shard)
+	return shard, nil
 }
 
 func (fs *FileSorter) Sharding() error {
-	shards := make([]*fileBuffer, 0)
+	fs.shards = make([]*fileBuffer, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(len(fs.sources))
+	for i := 0; i < len(fs.sources); i++ {
+		source := fs.sources[i]
+		go func() {
+			defer wg.Add(-1)
+			err := fs.shardingSource(source)
+			if err != nil {
+				log.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	return nil
+}
 
+func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	var lastPos int64
-	rows := make(model.Rows, 0)
 	buf := bytes.Buffer{}
-	total := 0
-	meta := fs.table.Meta
-	cols := meta.Keys
-	if len(cols) == 0 {
-		cols = meta.Cols
-	}
-	tags := make([]int, 0)
-	for _, col := range cols {
-		if col != "updated_at" {
-			tags = append(tags, meta.ColsIndex[col])
+	rows := make(model.Rows, 0)
+	for {
+		row, nextErr := source.nextRow()
+		if row != nil {
+			rows = append(rows, row)
 		}
-	}
-	updatedAt := meta.ColsIndex["updated_at"]
-	for _, source := range fs.sources {
-		for {
-			row, nextErr := source.nextRow()
-			if row != nil {
-				rows = append(rows, row)
+		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
+			lastPos = source.pos
+			sort.Sort(&rows)
+			shard, err := fs.newShard(fmt.Sprintf("%d.shard.%d", fs.table.ID, len(fs.shards)))
+			if err != nil {
+				return err
 			}
-			if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
-				lastPos = source.pos
-				sort.Sort(&rows)
-				shard, err := fs.newShard(fmt.Sprintf("%d.shard.%d", fs.table.ID, len(shards)))
-				if err != nil {
-					return err
-				}
-				shards = append(shards, shard)
-				l := rows.Len()
-				for i := 0; i < l; i++ {
-					cur := rows[i]
-					for j := i + 1; j < l; j++ {
-						next := rows[j]
-						same := true
-						for _, t := range tags {
-							if !cur.Values[t].Equals(next.Values[t]) {
-								same = false
-								break
-							}
-						}
-						if !same {
-							i = j - 1
-							break
-						}
-						if next.Values[updatedAt].Compare(cur.Values[updatedAt]) > 0 {
-							cur = next
-						}
+			l := rows.Len()
+			for i := 0; i < l; i++ {
+				cur := rows[i]
+				for j := i + 1; j < l; j++ {
+					next := rows[j]
+					if cur.Key != next.Key {
+						i = j - 1
+						break
 					}
-					buf.Write(cur.Buffer.Bytes())
+					i = j
+					if next.UpdateAt > cur.UpdateAt {
+						cur = next
+					}
 				}
-				total += rows.Len()
-				_, err = shard.f.Write(buf.Bytes())
-				if err != nil {
-					return err
-				}
-				rows = make(model.Rows, 0)
-				buf.Reset()
-				if nextErr != nil {
-					break
-				}
+				buf.Write(cur.Buffer.Bytes())
+			}
+			_, err = shard.f.Write(buf.Bytes())
+			if err != nil {
+				return err
+			}
+			rows = make(model.Rows, 0)
+			buf.Reset()
+			if nextErr != nil {
+				break
 			}
 		}
-		lastPos = 0
 	}
-	fmt.Println(total)
 	return nil
 }
