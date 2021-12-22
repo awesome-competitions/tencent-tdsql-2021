@@ -29,7 +29,7 @@ var dstPassword *string
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace-tencent\\data", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -160,12 +160,21 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		inserted += consts.InsertBatch
 		if inserted%100*consts.InsertBatch == 0 {
-			log.Infof("table %d inserted %d\n", fs.Table().ID, inserted)
+			log.Infof("table %d inserted %d\n", t.ID, inserted)
 		}
 		buf.Reset()
 	}
 	fb.Delete()
-	return t.Recover.Make(-1)
+	err = t.Recover.Make(-1)
+	if err != nil {
+		return err
+	}
+	total, err := count(t)
+	if err != nil {
+		return err
+	}
+	log.Infof("table %s.%s total %d\n", t.Database, t.Name, total)
+	return nil
 }
 
 func initTable(t *model.Table) error {
@@ -175,8 +184,8 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(string(t.Schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-	//sql = strings.ReplaceAll(sql, "float", "float(32,16)")
-	//sql = strings.ReplaceAll(sql, "double", "double(32,16)")
+	sql = strings.ReplaceAll(sql, "float", "float(32,16)")
+	sql = strings.ReplaceAll(sql, "double", "double(32,16)")
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
