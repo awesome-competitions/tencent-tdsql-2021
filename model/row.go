@@ -3,7 +3,6 @@ package model
 import (
 	"bytes"
 	"strconv"
-	"unsafe"
 )
 
 type Type int
@@ -16,6 +15,10 @@ const (
 	Char
 	Datetime
 )
+
+func (t Type) IsString() bool {
+	return t == Char || t == Datetime
+}
 
 var SqlTypeMapping = map[string]Type{
 	"bigint":   Bigint,
@@ -64,7 +67,18 @@ func (r Row) Compare(or interface{}) bool {
 }
 
 func (r Row) String() string {
-	return *(*string)(unsafe.Pointer(&r.Buffer))
+	sql := ""
+	for i, v := range r.Values {
+		if v.Type.IsString() {
+			sql += "'" + v.Source + "'"
+		} else {
+			sql += v.Source
+		}
+		if i < len(r.Values)-1 {
+			sql += ","
+		}
+	}
+	return sql
 }
 
 type Rows []*Row
@@ -82,8 +96,9 @@ func (rs *Rows) Swap(i, j int) {
 }
 
 type Value struct {
-	Type  Type
-	Value interface{}
+	Type   Type
+	Value  interface{}
+	Source string
 }
 
 func (v Value) Equals(o Value) bool {

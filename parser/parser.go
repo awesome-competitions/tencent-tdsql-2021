@@ -1,10 +1,12 @@
 package parser
 
 import (
+	"fmt"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
+	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
 	"io/ioutil"
 	"os"
@@ -120,6 +122,15 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 						DB:       db,
 						Meta:     ParseTableMeta(string(schema)),
 					}
+					r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
+					if err != nil {
+						return nil, err
+					}
+					err = r.Load()
+					if err != nil {
+						return nil, err
+					}
+					t.Recover = r
 					tableId++
 					tables = append(tables, t)
 					tableMap[tableKey] = t

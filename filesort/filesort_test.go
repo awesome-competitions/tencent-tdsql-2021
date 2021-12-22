@@ -18,7 +18,13 @@ func TestFileSorter_Sharding(t *testing.T) {
 	}
 	s := time.Now().UnixNano()
 	err = fs.Sharding()
-	fmt.Println((time.Now().UnixNano() - s) / 1e6)
+	fmt.Println("sharding", (time.Now().UnixNano()-s)/1e6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = time.Now().UnixNano()
+	err = fs.Merging()
+	fmt.Println("merging", (time.Now().UnixNano()-s)/1e6)
 	if err != nil {
 		t.Fatal(err)
 	}

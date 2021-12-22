@@ -13,12 +13,12 @@ type loserValue interface {
 }
 
 type loser struct {
-	loser  *loser
-	parent *loser
-	left   *loser
-	right  *loser
-
-	value loserValue
+	loser   *loser
+	parent  *loser
+	left    *loser
+	right   *loser
+	value   loserValue
+	invalid bool
 }
 
 func (l *loser) campaign() {
@@ -37,7 +37,18 @@ func (l *loser) reelect() {
 	}
 }
 
+func (l *loser) exit() {
+	l.invalid = true
+	l.reelect()
+}
+
 func (l *loser) compare(o *loser) bool {
+	if o.entity().invalid {
+		return false
+	}
+	if l.entity().invalid {
+		return true
+	}
 	return l.entity().value.Compare(o.entity().value)
 }
 
@@ -76,7 +87,7 @@ func newLoserTree(losers []*loser) *loserTree {
 				parent := &loser{}
 				parent.setLeft(child[0])
 				parent.setRight(child[1])
-				parent.campaign()
+				child[0].reelect()
 				tmp = append(tmp, parent)
 			}
 			if i+2 >= len(losers) {
@@ -84,6 +95,9 @@ func newLoserTree(losers []*loser) *loserTree {
 			}
 		}
 		losers = tmp
+	}
+	if losers[0].loser == nil {
+		losers[0].loser = losers[0]
 	}
 	return &loserTree{
 		root: losers[0],

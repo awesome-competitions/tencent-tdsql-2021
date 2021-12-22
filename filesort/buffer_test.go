@@ -23,7 +23,7 @@ func TestFileBuffer(t *testing.T) {
 	start := time.Now().UnixNano()
 	var row *model.Row
 	for i := 0; i < 3500000; i++ {
-		r, err := fb.nextRow()
+		r, err := fb.NextRow()
 		if r != nil {
 			row = r
 		}
