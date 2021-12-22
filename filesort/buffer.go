@@ -138,3 +138,7 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 	row.Key = key.String()
 	return &row, nil
 }
+
+func (fb *fileBuffer) Delete() {
+	_ = fb.f.Delete()
+}

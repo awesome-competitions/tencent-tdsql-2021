@@ -7,12 +7,14 @@ import (
 
 type File struct {
 	file *os.File
+	path string
 }
 
 func New(path string, flag int) (*File, error) {
 	file, err := os.OpenFile(path, flag, os.FileMode(0766))
 	return &File{
 		file: file,
+		path: path,
 	}, err
 }
 
@@ -56,4 +58,13 @@ func (f *File) Size() int64 {
 		return 0
 	}
 	return info.Size()
+}
+
+func (f *File) Close() error {
+	return f.file.Close()
+}
+
+func (f *File) Delete() error {
+	_ = f.Close()
+	return os.Remove(f.path)
 }

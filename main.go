@@ -164,6 +164,7 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		buf.Reset()
 	}
+	fb.Delete()
 	return t.Recover.Make(-1)
 }
 
