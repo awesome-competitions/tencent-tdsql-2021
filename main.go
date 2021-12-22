@@ -140,6 +140,7 @@ func schedule(fs *filesort.FileSorter) error {
 	}
 	log.Infof("table %d start schedule, start from %d\n", fs.Table().ID, offset)
 	eof := false
+	valid := false
 	inserted := 0
 	for !eof {
 		buf.WriteString(fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name))
@@ -149,7 +150,11 @@ func schedule(fs *filesort.FileSorter) error {
 				eof = true
 				break
 			}
+			valid = true
 			buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+		}
+		if !valid {
+			break
 		}
 		buf.Truncate(buf.Len() - 1)
 		buf.WriteString(";")
