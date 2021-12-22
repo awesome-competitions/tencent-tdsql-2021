@@ -39,7 +39,7 @@ var TypeParser = map[Type]func(str string) interface{}{
 	},
 	Float: func(str string) interface{} {
 		v, _ := strconv.ParseFloat(str, 64)
-		return float32(v)
+		return v
 	},
 	Char: func(str string) interface{} {
 		return str
@@ -70,9 +70,9 @@ func (r Row) String() string {
 	sql := ""
 	for i, v := range r.Values {
 		if v.Type.IsString() {
-			sql += "'" + v.Source + "'"
+			sql += "'" + v.String() + "'"
 		} else {
-			sql += v.Source
+			sql += v.String()
 		}
 		if i < len(r.Values)-1 {
 			sql += ","
@@ -101,6 +101,14 @@ type Value struct {
 	Source string
 }
 
+func (v Value) String() string {
+	switch v.Type {
+	case Float:
+		return strconv.FormatFloat(v.Value.(float64), 'f', 1, 64)
+	}
+	return v.Source
+}
+
 func (v Value) Equals(o Value) bool {
 	return v.Value == o.Value
 }
@@ -110,7 +118,7 @@ func (v Value) Compare(o Value) int {
 	case Bigint:
 		if v.Value.(int64) > o.Value.(int64) {
 			return 1
-		} else if v.Value.(int64) > o.Value.(int64) {
+		} else if v.Value.(int64) == o.Value.(int64) {
 			return 0
 		} else {
 			return -1
@@ -118,15 +126,15 @@ func (v Value) Compare(o Value) int {
 	case Double:
 		if v.Value.(float64) > o.Value.(float64) {
 			return 1
-		} else if v.Value.(float64) > o.Value.(float64) {
+		} else if v.Value.(float64) == o.Value.(float64) {
 			return 0
 		} else {
 			return -1
 		}
 	case Float:
-		if v.Value.(float32) > o.Value.(float32) {
+		if v.Value.(float64) > o.Value.(float64) {
 			return 1
-		} else if v.Value.(float32) > o.Value.(float32) {
+		} else if v.Value.(float64) == o.Value.(float64) {
 			return 0
 		} else {
 			return -1
@@ -134,7 +142,7 @@ func (v Value) Compare(o Value) int {
 	case Char, Datetime:
 		if v.Value.(string) > o.Value.(string) {
 			return 1
-		} else if v.Value.(string) > o.Value.(string) {
+		} else if v.Value.(string) == o.Value.(string) {
 			return 0
 		} else {
 			return -1

@@ -5,7 +5,6 @@ import (
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/model"
-	"unsafe"
 )
 
 type buffer struct {
@@ -102,17 +101,18 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 				start = i + 1
 				t := fb.meta.ColsType[fb.meta.Cols[index]]
 				s := string(bs)
-				if fb.tags[index] {
-					key.Write(bs)
-					key.WriteRune(':')
-				}
 				if index == upd {
 					row.UpdateAt = s
 				}
-				row.Values[index] = model.Value{
+				v := model.Value{
 					Type:   t,
-					Value:  model.TypeParser[t](*(*string)(unsafe.Pointer(&bs))),
+					Value:  model.TypeParser[t](s),
 					Source: s,
+				}
+				row.Values[index] = v
+				if fb.tags[index] {
+					key.WriteString(v.String())
+					key.WriteRune(':')
 				}
 				index++
 				if b == consts.LF {
