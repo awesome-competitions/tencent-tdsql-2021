@@ -21,8 +21,6 @@ type FileSorter struct {
 	shards  []*fileBuffer
 	result  *fileBuffer
 	table   *model.Table
-
-	filter map[string]bool
 }
 
 type shardLoserValue struct {
@@ -68,7 +66,6 @@ func New(table *model.Table) (*FileSorter, error) {
 	return &FileSorter{
 		sources: sources,
 		table:   table,
-		filter:  map[string]bool{},
 	}, nil
 }
 
@@ -78,14 +75,6 @@ func (fs *FileSorter) Table() *model.Table {
 
 func (fs *FileSorter) Result() *fileBuffer {
 	return fs.result
-}
-
-func (fs *FileSorter) Mark(str string) {
-	if len(fs.table.Meta.Keys) > 0 && fs.table.Meta.Keys[0] == "id" {
-		fs.Lock()
-		defer fs.Unlock()
-		fs.filter[str] = true
-	}
 }
 
 func (fs *FileSorter) newShard(tier int) (*fileBuffer, error) {
@@ -131,7 +120,6 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	for {
 		row, nextErr := source.NextRow()
 		if row != nil {
-			fs.Mark(row.Key)
 			rows = append(rows, row)
 		}
 		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
@@ -201,7 +189,6 @@ func (fs *FileSorter) Merging() error {
 	}
 	fs.result = fs.shards[0]
 	_, _ = fs.result.f.Seek(0, io.SeekStart)
-	log.Infof("%s.%s filters size %d\n", fs.table.Database, fs.table.Name, len(fs.filter))
 	return nil
 }
 
