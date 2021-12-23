@@ -58,6 +58,9 @@ type Row struct {
 
 func (r Row) Compare(or interface{}) bool {
 	for i, v := range r.Values {
+		if !v.Sortable {
+			continue
+		}
 		result := v.Compare(or.(Row).Values[i])
 		if result != 0 {
 			return result > 0
@@ -96,9 +99,10 @@ func (rs *Rows) Swap(i, j int) {
 }
 
 type Value struct {
-	Type   Type
-	Value  interface{}
-	Source string
+	Type     Type
+	Value    interface{}
+	Source   string
+	Sortable bool
 }
 
 func (v Value) String() string {

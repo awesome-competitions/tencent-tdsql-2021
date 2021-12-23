@@ -26,6 +26,10 @@ func (f *File) Name() string {
 	return f.file.Name()
 }
 
+func (f *File) Path() string {
+	return f.path
+}
+
 func (f *File) WriteAt(offset int64, bytes []byte) error {
 	_, err := f.file.WriteAt(bytes, offset)
 	return err

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/file"
+	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 )
 
@@ -105,9 +106,10 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 					row.UpdateAt = s
 				}
 				v := model.Value{
-					Type:   t,
-					Value:  model.TypeParser[t](s),
-					Source: s,
+					Type:     t,
+					Value:    model.TypeParser[t](s),
+					Source:   s,
+					Sortable: fb.tags[index],
 				}
 				row.Values[index] = v
 				if fb.tags[index] {
@@ -128,6 +130,7 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 		}
 		capacity, err := fb.f.Read(fb.buf.buf)
 		if err != nil {
+			log.Infof("%s read eof, buf %s\n", fb.f.Path(), row.Buffer.String())
 			return nil, err
 		}
 		fb.readTimes++
