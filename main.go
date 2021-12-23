@@ -34,7 +34,6 @@ func init() {
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
 	dstPassword = flag.String("dst_password", "Niconico2021@", "password of dst database")
-
 	flag.Parse()
 }
 
@@ -49,7 +48,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables, err := parser.ParseTables(db, *dataPath)
+	tables, err := parser.ParseTables(db, "/tmp/data")
 	if err != nil {
 		log.Panic(err)
 	}
