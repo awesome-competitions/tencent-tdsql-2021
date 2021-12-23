@@ -23,8 +23,9 @@ type Source struct {
 }
 
 type Meta struct {
-	Keys      []string
-	Cols      []string
-	ColsIndex map[string]int
-	ColsType  map[string]Type
+	Keys         []string
+	Cols         []string
+	ColsIndex    map[string]int
+	ColsType     map[string]Type
+	DefaultValue map[string]string
 }

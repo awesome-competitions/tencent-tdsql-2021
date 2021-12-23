@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
@@ -20,8 +21,10 @@ type TableStmt struct {
 }
 
 type Column struct {
-	Name string
-	Type string
+	Name         string
+	Type         string
+	Required     bool
+	DefaultValue string
 }
 
 func ParseTableStmt(sql string) *TableStmt {
@@ -36,9 +39,30 @@ func ParseTableStmt(sql string) *TableStmt {
 		} else if strings.HasPrefix(line, "`") {
 			name := strings.ReplaceAll(subs[0], "`", "")
 			t := strings.Split(subs[1], "(")[0]
+			required := strings.Contains(line, "not null")
+			defaultValue := bytes.Buffer{}
+			defaultValue.WriteString("null")
+			if i := strings.Index(line, "default"); i != -1 {
+				defaultValue.Reset()
+				start := false
+				for ; i < len(line); i++ {
+					if line[i] == '\'' {
+						if start {
+							break
+						}
+						start = true
+						continue
+					}
+					if start {
+						defaultValue.WriteByte(line[i])
+					}
+				}
+			}
 			stmt.Cols = append(stmt.Cols, Column{
-				Name: name,
-				Type: t,
+				Name:         name,
+				Type:         t,
+				Required:     required,
+				DefaultValue: defaultValue.String(),
 			})
 		} else if strings.HasPrefix(line, "primary key") {
 			keys := strings.Split(strings.ReplaceAll(subs[2][1:len(subs[2])-1], "`", ""), ",")
@@ -53,16 +77,19 @@ func ParseTableMeta(sql string) model.Meta {
 	cols := make([]string, 0)
 	colsIndex := map[string]int{}
 	colsType := map[string]model.Type{}
+	defaultValue := map[string]string{}
 	for i, col := range stmt.Cols {
 		cols = append(cols, col.Name)
 		colsIndex[col.Name] = i
 		colsType[col.Name] = model.SqlTypeMapping[col.Type]
+		defaultValue[col.Name] = col.DefaultValue
 	}
 	return model.Meta{
-		Keys:      stmt.Keys,
-		Cols:      cols,
-		ColsIndex: colsIndex,
-		ColsType:  colsType,
+		Keys:         stmt.Keys,
+		Cols:         cols,
+		ColsIndex:    colsIndex,
+		ColsType:     colsType,
+		DefaultValue: defaultValue,
 	}
 }
 

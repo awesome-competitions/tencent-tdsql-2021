@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/util"
 	"github.com/go-basic/uuid"
@@ -12,7 +13,46 @@ import (
 )
 
 func main() {
-	dataPath := "D:\\workspace\\tencent\\data"
+	dataPath := "D:\\workspace\\tencent\\data1"
+	dataSourceFiles, err := ioutil.ReadDir(dataPath)
+	if err != nil {
+		panic(err)
+	}
+	filter := map[string]bool{}
+	total := 0
+	for _, dataSourceFile := range dataSourceFiles {
+		databaseFiles, err := ioutil.ReadDir(util.AssemblePath(dataPath, dataSourceFile.Name()))
+		if err != nil {
+			panic(err)
+		}
+		for _, databaseFile := range databaseFiles {
+			tableFiles, err := ioutil.ReadDir(util.AssemblePath(dataPath, dataSourceFile.Name(), databaseFile.Name()))
+			if err != nil {
+				panic(err)
+			}
+			for _, tableFile := range tableFiles {
+				if strings.HasSuffix(tableFile.Name(), ".csv") {
+					f, _ := file.New(util.AssemblePath(dataPath, dataSourceFile.Name(), databaseFile.Name(), tableFile.Name()), os.O_RDONLY)
+					bs, _ := f.ReadAll()
+					s := string(bs)
+					strs := strings.Split(s, "\n")
+					for _, line := range strs {
+						if line == "" {
+							continue
+						}
+						total++
+						filter[line] = true
+					}
+				}
+			}
+		}
+	}
+	fmt.Println(len(filter))
+	fmt.Println(total)
+}
+
+func _main() {
+	dataPath := "D:\\workspace\\tencent\\data1"
 	dataSourceFiles, err := ioutil.ReadDir(dataPath)
 	if err != nil {
 		panic(err)

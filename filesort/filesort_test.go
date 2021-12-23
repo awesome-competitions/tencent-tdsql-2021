@@ -8,7 +8,7 @@ import (
 )
 
 func TestFileSorter_Sharding(t *testing.T) {
-	tables, err := parser.ParseTables(nil, "D:\\workspace\\tencent\\data")
+	tables, err := parser.ParseTables(nil, "D:\\workspace\\tencent\\data2")
 	if err != nil {
 		t.Fatal(err)
 	}
