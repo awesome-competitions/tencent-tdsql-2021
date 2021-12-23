@@ -48,7 +48,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables, err := parser.ParseTables(db, "/tmp/data")
+	tables, err := parser.ParseTables(db, *dataPath)
 	if err != nil {
 		log.Panic(err)
 	}
