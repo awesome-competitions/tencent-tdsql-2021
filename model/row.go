@@ -2,6 +2,8 @@ package model
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -28,24 +30,27 @@ var SqlTypeMapping = map[string]Type{
 	"datetime": Datetime,
 }
 
-var TypeParser = map[Type]func(str string) interface{}{
-	Bigint: func(str string) interface{} {
-		v, _ := strconv.ParseInt(str, 10, 64)
-		return v
+var TypeParser = map[Type]func(str string) (interface{}, error){
+	Bigint: func(str string) (interface{}, error) {
+		return strconv.ParseInt(str, 10, 64)
 	},
-	Double: func(str string) interface{} {
-		v, _ := strconv.ParseFloat(str, 64)
-		return v
+	Double: func(str string) (interface{}, error) {
+		return strconv.ParseFloat(str, 64)
 	},
-	Float: func(str string) interface{} {
-		v, _ := strconv.ParseFloat(str, 64)
-		return v
+	Float: func(str string) (interface{}, error) {
+		return strconv.ParseFloat(str, 64)
 	},
-	Char: func(str string) interface{} {
-		return str
+	Char: func(str string) (interface{}, error) {
+		if len(str) > 32 {
+			return str, errors.New(fmt.Sprintf("char len err: %d", len(str)))
+		}
+		return str, nil
 	},
-	Datetime: func(str string) interface{} {
-		return str
+	Datetime: func(str string) (interface{}, error) {
+		if len(str) != 19 {
+			return str, errors.New(fmt.Sprintf("datetime len err: %d", len(str)))
+		}
+		return str, nil
 	},
 }
 
@@ -54,6 +59,7 @@ type Row struct {
 	Buffer   bytes.Buffer
 	Key      string
 	UpdateAt string
+	Invalid  bool
 }
 
 func (r Row) Compare(or interface{}) bool {

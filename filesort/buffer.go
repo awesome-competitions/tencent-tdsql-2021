@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/file"
+	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 )
 
@@ -82,6 +83,17 @@ func (fb *fileBuffer) Jump(c int) error {
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
+	row, err := fb._nextRow()
+	if err != nil {
+		return nil, err
+	}
+	if row.Invalid {
+		return fb.NextRow()
+	}
+	return row, nil
+}
+
+func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 	row := model.Row{
 		Values: make([]model.Value, len(fb.meta.Cols)),
 		Buffer: bytes.Buffer{},
@@ -107,9 +119,14 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 				if index == upd {
 					row.UpdateAt = s
 				}
+				value, err := model.TypeParser[t](s)
+				if err != nil {
+					log.Error(err)
+					row.Invalid = true
+				}
 				v := model.Value{
 					Type:     t,
-					Value:    model.TypeParser[t](s),
+					Value:    value,
 					Source:   s,
 					Sortable: fb.tags[index],
 				}
