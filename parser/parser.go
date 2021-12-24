@@ -135,6 +135,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 					log.Error(err)
 					return nil, err
 				}
+				log.Infof("%s file schema %s\n", schemaFiles[k].Path(), schema)
 				data := dataFiles[k]
 				tableName := util.ParseName(data.Name())
 				tableKey := dbName + ":" + tableName
