@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	filter := map[string]bool{}
+	filter := map[int64]bool{}
 	total := 0
 	for _, dataSourceFile := range dataSourceFiles {
 		databaseFiles, err := ioutil.ReadDir(util.AssemblePath(dataPath, dataSourceFile.Name()))
@@ -41,12 +42,18 @@ func main() {
 							continue
 						}
 						total++
-						filter[line] = true
+
+						v, err := strconv.ParseInt(line, 10, 64)
+						if err != nil {
+							panic(err)
+						}
+						filter[v] = true
 					}
 				}
 			}
 		}
 	}
+	fmt.Println("target 6652433")
 	fmt.Println(len(filter))
 	fmt.Println(total)
 }
