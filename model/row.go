@@ -112,10 +112,10 @@ type Value struct {
 }
 
 func (v Value) String() string {
-	switch v.Type {
-	case Float:
-		return strconv.FormatFloat(v.Value.(float64), 'g', 6, 64)
-	}
+	//switch v.Type {
+	//case Float:
+	//	return strconv.FormatFloat(v.Value.(float64), 'g', 6, 64)
+	//}
 	return v.Source
 }
 
