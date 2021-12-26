@@ -84,17 +84,17 @@ func _main() {
 				defer func() {
 					sortLimit <- true
 				}()
-				log.Infof("table %d file sort starting\n", fs.Table().ID)
+				log.Infof("table %s file sort starting\n", fs.Table())
 				err := fs.Sharding()
 				if err != nil {
 					log.Panic(err)
 				}
-				log.Infof("table %d file sort sharding finished\n", fs.Table().ID)
+				log.Infof("table %s file sort sharding finished\n", fs.Table())
 				err = fs.Merging()
 				if err != nil {
 					log.Panic(err)
 				}
-				log.Infof("table %d file sort merging finished\n", fs.Table().ID)
+				log.Infof("table %s file sort merging finished\n", fs.Table())
 				fsChan <- fs
 			}()
 		}
@@ -132,12 +132,12 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("table %d jumping to %d\n", fs.Table().ID, offset)
+	log.Infof("table %s jumping to %d\n", fs.Table(), offset)
 	err = fb.Jump(offset)
 	if err != nil {
 		return err
 	}
-	log.Infof("table %d start schedule, start from %d\n", fs.Table().ID, offset)
+	log.Infof("table %s start schedule, start from %d\n", fs.Table(), offset)
 	eof := false
 	valid := false
 	inserted := 0
@@ -188,7 +188,6 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(string(t.Schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-	log.Infof("%s.%s create table sql %s\n", t.Database, t.Name, sql)
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)

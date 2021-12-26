@@ -17,6 +17,10 @@ type Table struct {
 	Recover  *rver.Recover
 }
 
+func (t Table) String() string {
+	return t.Database + "." + t.Name
+}
+
 type Source struct {
 	DataSource string
 	File       *file.File
