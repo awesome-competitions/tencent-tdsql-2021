@@ -196,6 +196,7 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(string(t.Schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database))
+	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey=id")
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)

@@ -104,6 +104,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 	if err != nil {
 		return nil, err
 	}
+	tables := make([]*model.Table, 0)
 	tableId := 1
 	tableMap := map[string]*model.Table{}
 	tablesMap := map[string][]*model.Table{}
@@ -161,6 +162,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 					}
 					t.Recover = r
 					tableId++
+					tables = append(tables, t)
 					tablesMap[dbName] = append(tablesMap[dbName], t)
 					tableMap[tableKey] = t
 				}
@@ -171,7 +173,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 			}
 		}
 	}
-	return sortTables(tablesMap), nil
+	return tables, nil
 }
 
 func sortTables(tablesMap map[string][]*model.Table) []*model.Table {
