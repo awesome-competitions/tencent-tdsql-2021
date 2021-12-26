@@ -23,6 +23,7 @@ type Source struct {
 }
 
 type Meta struct {
+	PrimaryKeys  []string
 	Keys         []string
 	Cols         []string
 	ColsIndex    map[string]int

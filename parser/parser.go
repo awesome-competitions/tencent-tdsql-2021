@@ -15,9 +15,10 @@ import (
 )
 
 type TableStmt struct {
-	Name string
-	Cols []Column
-	Keys []string
+	Name        string
+	Cols        []Column
+	PrimaryKeys []string
+	Keys        []string
 }
 
 type Column struct {
@@ -66,6 +67,10 @@ func ParseTableStmt(sql string) *TableStmt {
 			})
 		} else if strings.HasPrefix(line, "primary key") {
 			keys := strings.Split(strings.ReplaceAll(subs[2][1:len(subs[2])-1], "`", ""), ",")
+			stmt.PrimaryKeys = keys
+			stmt.Keys = keys
+		} else if strings.HasPrefix(line, "key") {
+			keys := strings.Split(strings.ReplaceAll(subs[1][1:len(subs[1])-1], "`", ""), ",")
 			stmt.Keys = keys
 		}
 	}
@@ -85,6 +90,7 @@ func ParseTableMeta(sql string) model.Meta {
 		defaultValue[col.Name] = col.DefaultValue
 	}
 	return model.Meta{
+		PrimaryKeys:  stmt.PrimaryKeys,
 		Keys:         stmt.Keys,
 		Cols:         cols,
 		ColsIndex:    colsIndex,
