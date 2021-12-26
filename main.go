@@ -166,7 +166,6 @@ func schedule(fs *filesort.FileSorter) error {
 		buf.WriteString(";")
 		_, err = t.DB.Exec(buf.String())
 		if err != nil {
-			log.Infof("%s.%s err sql: %s\n", t.Database, t.Name, buf.String())
 			return err
 		}
 		inserted += consts.InsertBatch
