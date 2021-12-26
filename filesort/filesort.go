@@ -12,7 +12,6 @@ import (
 	"os"
 	"sort"
 	"sync"
-	"time"
 )
 
 type FileSorter struct {
@@ -58,7 +57,10 @@ func (sv *shardLoserValue) Compare(o interface{}) bool {
 	return sv.Compare(ov)
 }
 
-func New(table *model.Table) (*FileSorter, error) {
+func New(table *model.Table, flag int, path string) (*FileSorter, error) {
+	if flag == 1 {
+		return recoverFileSort(table, path)
+	}
 	sources := make([]*fileBuffer, len(table.Sources))
 	for i, s := range table.Sources {
 		sources[i] = newFileBuffer(s.File, table.Meta)
@@ -66,6 +68,17 @@ func New(table *model.Table) (*FileSorter, error) {
 	return &FileSorter{
 		sources: sources,
 		table:   table,
+	}, nil
+}
+
+func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
+	result, err := file.New(path, os.O_RDWR)
+	if err != nil {
+		return nil, err
+	}
+	return &FileSorter{
+		result: newFileBuffer(result, table.Meta),
+		table:  table,
 	}, nil
 }
 
@@ -80,7 +93,7 @@ func (fs *FileSorter) Result() *fileBuffer {
 func (fs *FileSorter) newShard(tier int) (*fileBuffer, error) {
 	fs.Lock()
 	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("%d.%d.shard.%d.%d", time.Now().UnixNano(), fs.table.ID, tier, len(fs.shards)), os.O_CREATE|os.O_RDWR)
+	f, err := file.New(fmt.Sprintf("%d.shard.%d.%d", fs.table.ID, tier, len(fs.shards)), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +202,7 @@ func (fs *FileSorter) Merging() error {
 	}
 	fs.result = fs.shards[0]
 	_, _ = fs.result.f.Seek(0, io.SeekStart)
-	return nil
+	return fs.table.Recover.Make(1, fs.result.f.Path())
 }
 
 func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
@@ -242,8 +255,5 @@ func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
 			return err
 		}
 	}
-	//for _, s := range shards {
-	//	s.Delete()
-	//}
 	return nil
 }

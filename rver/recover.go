@@ -1,6 +1,7 @@
 package rver
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/ainilili/tdsql-competition/file"
 	"io"
@@ -8,8 +9,7 @@ import (
 )
 
 type Recover struct {
-	file     *file.File
-	RowIndex int32
+	file *file.File
 }
 
 func New(path string) (*Recover, error) {
@@ -20,26 +20,33 @@ func New(path string) (*Recover, error) {
 	return &Recover{file: f}, nil
 }
 
-func (r *Recover) Make(rowIndex int32) error {
+func (r *Recover) Make(flag int, path string) error {
 	data := make([]byte, 4)
-	binary.BigEndian.PutUint32(data, uint32(rowIndex))
-	err := r.file.WriteAt(0, data)
+	binary.BigEndian.PutUint32(data, uint32(flag))
+	buf := bytes.Buffer{}
+	buf.Write(data)
+	buf.WriteString(path)
+	err := r.file.WriteAt(0, buf.Bytes())
 	if err != nil {
 		return err
 	}
-	r.RowIndex = rowIndex
 	return nil
 }
 
-func (r *Recover) Load() error {
-	data := make([]byte, 4)
-	err := r.file.ReadAt(0, data)
+func (r *Recover) Load() (int, string, error) {
+	_, err := r.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return 0, "", err
+	}
+	bs, err := r.file.ReadAll()
 	if err != nil {
 		if err == io.EOF {
-			return nil
+			return 0, "", nil
 		}
-		return err
+		return 0, "", err
 	}
-	r.RowIndex = int32(binary.BigEndian.Uint32(data))
-	return nil
+	if len(bs) == 0 {
+		return 0, "", nil
+	}
+	return int(binary.BigEndian.Uint32(bs[:4])), string(bs[4:]), nil
 }

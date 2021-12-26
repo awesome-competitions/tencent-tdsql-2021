@@ -54,11 +54,15 @@ func _main() {
 	}
 	fss := make([]*filesort.FileSorter, 0)
 	for i := range tables {
-		fs, err := filesort.New(tables[i])
+		fg, path, err := tables[i].Recover.Load()
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
-		if fs.Table().Recover.RowIndex != -1 {
+		if fg != 2 {
+			fs, err := filesort.New(tables[i], fg, path)
+			if err != nil {
+				log.Panic(err)
+			}
 			fss = append(fss, fs)
 		}
 	}
@@ -81,10 +85,6 @@ func _main() {
 					sortLimit <- true
 				}()
 				log.Infof("table %d file sort starting\n", fs.Table().ID)
-				if fs.Table().Recover.RowIndex == -1 {
-					log.Infof("table %d scheduled, skipped\n", fs.Table().ID)
-					return
-				}
 				err := fs.Sharding()
 				if err != nil {
 					log.Panic(err)
@@ -169,7 +169,7 @@ func schedule(fs *filesort.FileSorter) error {
 		buf.Reset()
 	}
 	fb.Delete()
-	err = t.Recover.Make(-1)
+	err = t.Recover.Make(2, "")
 	if err != nil {
 		return err
 	}

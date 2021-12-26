@@ -2,8 +2,6 @@ package model
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"strconv"
 )
 
@@ -41,15 +39,9 @@ var TypeParser = map[Type]func(str string) (interface{}, error){
 		return strconv.ParseFloat(str, 64)
 	},
 	Char: func(str string) (interface{}, error) {
-		if len(str) > 32 {
-			return str, errors.New(fmt.Sprintf("char len err: %d", len(str)))
-		}
 		return str, nil
 	},
 	Datetime: func(str string) (interface{}, error) {
-		if len(str) != 19 {
-			return str, errors.New(fmt.Sprintf("datetime len err: %d", len(str)))
-		}
 		return str, nil
 	},
 }

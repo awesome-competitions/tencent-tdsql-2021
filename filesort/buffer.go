@@ -113,9 +113,6 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 				start = i + 1
 				t := fb.meta.ColsType[fb.meta.Cols[index]]
 				s := string(bs)
-				if s == "" {
-					s = fb.meta.DefaultValue[fb.meta.Cols[index]]
-				}
 				if index == upd {
 					row.UpdateAt = s
 				}

@@ -11,17 +11,14 @@ func TestRecover_Make(t *testing.T) {
 		log.Fatal(err)
 	}
 	t.Log(r.Load())
-	t.Log(r.RowIndex)
-	err = r.Make(2)
+	err = r.Make(2, "abc")
 	if err != nil {
 		log.Fatal(err)
 	}
 	t.Log(r.Load())
-	t.Log(r.RowIndex)
-	err = r.Make(-1)
+	err = r.Make(4, "")
 	if err != nil {
 		log.Fatal(err)
 	}
 	t.Log(r.Load())
-	t.Log(r.RowIndex)
 }

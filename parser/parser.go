@@ -160,10 +160,6 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 					if err != nil {
 						return nil, err
 					}
-					err = r.Load()
-					if err != nil {
-						return nil, err
-					}
 					t.Recover = r
 					tableId++
 					tables = append(tables, t)
