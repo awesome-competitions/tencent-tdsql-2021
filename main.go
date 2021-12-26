@@ -171,7 +171,7 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		inserted += consts.InsertBatch
 		if inserted%100*consts.InsertBatch == 0 {
-			log.Infof("table %d inserted %d\n", t.ID, inserted)
+			log.Infof("table %s inserted %d\n", t, inserted)
 		}
 		buf.Reset()
 	}
