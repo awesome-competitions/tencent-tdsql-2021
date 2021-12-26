@@ -57,10 +57,7 @@ func (sv *shardLoserValue) Compare(o interface{}) bool {
 	return sv.Compare(ov)
 }
 
-func New(table *model.Table, flag int, path string) (*FileSorter, error) {
-	if flag == 1 {
-		return recoverFileSort(table, path)
-	}
+func New(table *model.Table) (*FileSorter, error) {
 	sources := make([]*fileBuffer, len(table.Sources))
 	for i, s := range table.Sources {
 		sources[i] = newFileBuffer(s.File, table.Meta)
@@ -69,6 +66,10 @@ func New(table *model.Table, flag int, path string) (*FileSorter, error) {
 		sources: sources,
 		table:   table,
 	}, nil
+}
+
+func Recover(table *model.Table, path string) (*FileSorter, error) {
+	return recoverFileSort(table, path)
 }
 
 func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
@@ -254,6 +255,9 @@ func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
 		if err != nil {
 			return err
 		}
+	}
+	for _, s := range shards {
+		s.Delete()
 	}
 	return nil
 }

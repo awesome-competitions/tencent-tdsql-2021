@@ -52,23 +52,9 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	fss := make([]*filesort.FileSorter, 0)
-	for i := range tables {
-		fg, path, err := tables[i].Recover.Load()
-		if err != nil {
-			log.Panic(err)
-		}
-		if fg != 2 {
-			fs, err := filesort.New(tables[i], fg, path)
-			if err != nil {
-				log.Panic(err)
-			}
-			fss = append(fss, fs)
-		}
-	}
 
-	fsChan := make(chan *filesort.FileSorter, len(fss))
-	sortLimit := make(chan bool, 2)
+	fsChan := make(chan *filesort.FileSorter, len(tables))
+	sortLimit := make(chan bool, 4)
 	syncLimit := make(chan bool, 4)
 	for i := 0; i < cap(sortLimit); i++ {
 		sortLimit <- true
@@ -76,6 +62,27 @@ func _main() {
 	for i := 0; i < cap(syncLimit); i++ {
 		syncLimit <- true
 	}
+	fss := make([]*filesort.FileSorter, 0)
+	for i := range tables {
+		fg, path, err := tables[i].Recover.Load()
+		if err != nil {
+			log.Panic(err)
+		}
+		if fg == 0 {
+			fs, err := filesort.New(tables[i])
+			if err != nil {
+				log.Panic(err)
+			}
+			fss = append(fss, fs)
+		} else if fg == 1 {
+			fs, err := filesort.Recover(tables[i], path)
+			if err != nil {
+				log.Panic(err)
+			}
+			fsChan <- fs
+		}
+	}
+
 	go func() {
 		for i := range fss {
 			_ = <-sortLimit
