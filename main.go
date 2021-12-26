@@ -54,8 +54,8 @@ func _main() {
 	}
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
-	sortLimit := make(chan bool, 4)
-	syncLimit := make(chan bool, 8)
+	sortLimit := make(chan bool, consts.FileSortLimit)
+	syncLimit := make(chan bool, consts.SyncLimit)
 	for i := 0; i < cap(sortLimit); i++ {
 		sortLimit <- true
 	}
@@ -79,7 +79,7 @@ func _main() {
 			if err != nil {
 				log.Panic(err)
 			}
-			fsChan <- fs
+			fss = append(fss, fs)
 		}
 	}
 
@@ -91,17 +91,19 @@ func _main() {
 				defer func() {
 					sortLimit <- true
 				}()
-				log.Infof("table %s file sort starting\n", fs.Table())
-				err := fs.Sharding()
-				if err != nil {
-					log.Panic(err)
+				if fs.Result() == nil {
+					log.Infof("table %s file sort starting\n", fs.Table())
+					err := fs.Sharding()
+					if err != nil {
+						log.Panic(err)
+					}
+					log.Infof("table %s file sort sharding finished\n", fs.Table())
+					err = fs.Merging()
+					if err != nil {
+						log.Panic(err)
+					}
+					log.Infof("table %s file sort merging finished\n", fs.Table())
 				}
-				log.Infof("table %s file sort sharding finished\n", fs.Table())
-				err = fs.Merging()
-				if err != nil {
-					log.Panic(err)
-				}
-				log.Infof("table %s file sort merging finished\n", fs.Table())
 				fsChan <- fs
 			}()
 		}
