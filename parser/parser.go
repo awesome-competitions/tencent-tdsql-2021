@@ -104,9 +104,9 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 	if err != nil {
 		return nil, err
 	}
-	tables := make([]*model.Table, 0)
 	tableId := 1
 	tableMap := map[string]*model.Table{}
+	tablesMap := map[string][]*model.Table{}
 	for _, dataSourceFile := range dataSourceFiles {
 		databaseFiles, err := ioutil.ReadDir(util.AssemblePath(dataPath, dataSourceFile.Name()))
 		if err != nil {
@@ -161,7 +161,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 					}
 					t.Recover = r
 					tableId++
-					tables = append(tables, t)
+					tablesMap[dbName] = append(tablesMap[dbName], t)
 					tableMap[tableKey] = t
 				}
 				t.Sources = append(t.Sources, model.Source{
@@ -171,5 +171,20 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 			}
 		}
 	}
-	return tables, nil
+	return sortTables(tablesMap), nil
+}
+
+func sortTables(tablesMap map[string][]*model.Table) []*model.Table {
+	tables := make([]*model.Table, 0)
+	l := 0
+	for _, v := range tablesMap {
+		l = len(v)
+		break
+	}
+	for i := 0; i < l; i++ {
+		for _, v := range tablesMap {
+			tables = append(tables, v[i])
+		}
+	}
+	return tables
 }
