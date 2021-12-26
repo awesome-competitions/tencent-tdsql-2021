@@ -55,7 +55,7 @@ func _main() {
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, 4)
-	syncLimit := make(chan bool, 4)
+	syncLimit := make(chan bool, 8)
 	for i := 0; i < cap(sortLimit); i++ {
 		sortLimit <- true
 	}
