@@ -199,10 +199,12 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-	if len(t.Meta.PrimaryKeys) > 0 {
-		sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
+
+	if len(t.Meta.PrimaryKeys) == 0 {
+		sql = strings.ReplaceAll(sql, "\n) ENGINE=InnoDB", fmt.Sprintf(",\nPRIMARY KEY (%s)\n) ENGINE=InnoDB", t.Cols))
+		t.Meta.PrimaryKeys = t.Meta.Cols
 	}
-	//sql = "/*sets:allsets*/ " + sql
+	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
