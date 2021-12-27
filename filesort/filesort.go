@@ -256,8 +256,8 @@ func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
 			return err
 		}
 	}
-	for _, s := range shards {
-		s.Delete()
-	}
+	//for _, s := range shards {
+	//	s.Delete()
+	//}
 	return nil
 }

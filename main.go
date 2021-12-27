@@ -179,7 +179,7 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		buf.Reset()
 	}
-	fb.Delete()
+	//fb.Delete()
 	err = t.Recover.Make(2, "")
 	if err != nil {
 		return err
