@@ -144,6 +144,7 @@ func schedule(fs *filesort.FileSorter) error {
 	buf.WriteString(header)
 	err = fs.Merging(func(row *model.Row) error {
 		if index < offset {
+			index++
 			return nil
 		}
 		buf.WriteString(fmt.Sprintf("(%s),", row.String()))
