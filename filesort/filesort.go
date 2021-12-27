@@ -185,6 +185,8 @@ func (fs *FileSorter) Merging(handle func(row *model.Row) error) error {
 	losers := make([]*loser, 0)
 	for _, shard := range fs.shards {
 		_, _ = shard.f.Seek(0, io.SeekStart)
+		shard.buf.reset()
+		shard.pos = 0
 		l := &loser{}
 		sv := &shardLoserValue{
 			shard: shard,

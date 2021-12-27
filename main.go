@@ -168,6 +168,7 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") {
+			time.Sleep(100 * time.Millisecond)
 			return schedule(fs)
 		}
 		return err
