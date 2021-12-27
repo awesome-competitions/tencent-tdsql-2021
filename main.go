@@ -52,7 +52,6 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables = tables[2:]
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
@@ -168,6 +167,9 @@ func schedule(fs *filesort.FileSorter) error {
 	})
 	if err != nil {
 		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") {
+			return schedule(fs)
+		}
 		return err
 	}
 	if buffered > 0 {
