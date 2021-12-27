@@ -217,9 +217,8 @@ func count(t *model.Table) (int, error) {
 		return 0, err
 	}
 	total := 0
-	str := ""
 	if rows.Next() {
-		err = rows.Scan(&total, &str)
+		err = rows.Scan(&total)
 		if err != nil {
 			return 0, err
 		}
