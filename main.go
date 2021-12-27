@@ -29,7 +29,7 @@ var dstPassword *string
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data2", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -168,11 +168,11 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		buf.Truncate(buf.Len() - 1)
 		buf.WriteString(";")
-		_, err = t.DB.Exec(buf.String())
-		if err != nil {
-			log.Error(err)
-			return err
-		}
+		//_, err = t.DB.Exec(buf.String())
+		//if err != nil {
+		//	log.Error(err)
+		//	return err
+		//}
 		inserted += consts.InsertBatch
 		if inserted%100*consts.InsertBatch == 0 {
 			log.Infof("table %s inserted %d\n", t, inserted)
@@ -199,15 +199,15 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-
 	if len(t.Meta.PrimaryKeys) == 0 {
-		sql = strings.ReplaceAll(sql, "\n) ENGINE=InnoDB", fmt.Sprintf(",\nPRIMARY KEY (%s)\n) ENGINE=InnoDB", t.Cols))
+		sql = strings.ReplaceAll(sql, "\n) ENGINE=InnoDB", fmt.Sprintf(",\nPRIMARY KEY (%s)\n) ENGINE=InnoDB", t.Cols[:strings.LastIndex(t.Cols, ",")]))
 		t.Meta.PrimaryKeys = t.Meta.Cols
 	}
 	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
+		log.Error(sql)
 		return err
 	}
 	return nil
