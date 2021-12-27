@@ -139,6 +139,7 @@ func schedule(fs *filesort.FileSorter) error {
 	buf := bytes.Buffer{}
 	offset, err := count(t)
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 	log.Infof("table %s jumping to %d\n", fs.Table(), offset)
@@ -169,6 +170,7 @@ func schedule(fs *filesort.FileSorter) error {
 		buf.WriteString(";")
 		_, err = t.DB.Exec(buf.String())
 		if err != nil {
+			log.Error(err)
 			return err
 		}
 		inserted += consts.InsertBatch
@@ -200,7 +202,8 @@ func initTable(t *model.Table) error {
 	//if len(t.Meta.PrimaryKeys) > 0 {
 	//	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
 	//}
-	_, err = t.DB.Exec("/*sets:allsets*/ " + sql)
+	sql = "/*sets:allsets*/ " + sql
+	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -209,13 +212,14 @@ func initTable(t *model.Table) error {
 }
 
 func count(t *model.Table) (int, error) {
-	rows, err := t.DB.Query(fmt.Sprintf("SELECT count(0) FROM %s.%s", t.Database, t.Name))
+	rows, err := t.DB.Query(fmt.Sprintf("%s SELECT count(0) FROM %s.%s", t.Set, t.Database, t.Name))
 	if err != nil {
 		return 0, err
 	}
 	total := 0
+	str := ""
 	if rows.Next() {
-		err = rows.Scan(&total)
+		err = rows.Scan(&total, &str)
 		if err != nil {
 			return 0, err
 		}
