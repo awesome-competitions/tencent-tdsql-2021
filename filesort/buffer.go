@@ -29,7 +29,7 @@ type fileBuffer struct {
 }
 
 func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
-	cols := meta.Keys
+	cols := meta.PrimaryKeys
 	if len(cols) == 0 {
 		cols = meta.Cols
 	}
