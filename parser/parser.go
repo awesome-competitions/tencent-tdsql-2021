@@ -161,6 +161,12 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 						return nil, err
 					}
 					t.Recover = r
+					for i, c := range t.Meta.Cols {
+						t.Cols += c
+						if i != len(t.Meta.Cols)-1 {
+							t.Cols += ","
+						}
+					}
 					tableId++
 					tables = append(tables, t)
 					tablesMap[dbName] = append(tablesMap[dbName], t)

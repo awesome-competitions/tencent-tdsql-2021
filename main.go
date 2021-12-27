@@ -151,7 +151,7 @@ func schedule(fs *filesort.FileSorter) error {
 	eof := false
 	valid := false
 	inserted := 0
-	header := fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name)
+	header := fmt.Sprintf("INSERT INTO %s.%s(%s) VALUES ", t.Database, t.Name, t.Cols)
 	for !eof {
 		buf.WriteString(header)
 		for i := 0; i < consts.InsertBatch; i++ {

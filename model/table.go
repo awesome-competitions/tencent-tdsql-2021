@@ -16,6 +16,7 @@ type Table struct {
 	DB       *database.DB
 	Recover  *rver.Recover
 	Set      string
+	Cols     string
 }
 
 func (t Table) String() string {
