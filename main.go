@@ -151,7 +151,7 @@ func schedule(fs *filesort.FileSorter) error {
 	eof := false
 	valid := false
 	inserted := 0
-	header := fmt.Sprintf("%sINSERT INTO %s.%s VALUES ", t.Set, t.Database, t.Name)
+	header := fmt.Sprintf("INSERT INTO %s.%s VALUES ", t.Database, t.Name)
 	for !eof {
 		buf.WriteString(header)
 		for i := 0; i < consts.InsertBatch; i++ {
@@ -193,16 +193,16 @@ func schedule(fs *filesort.FileSorter) error {
 }
 
 func initTable(t *model.Table) error {
-	_, err := t.DB.Exec(fmt.Sprintf("/*sets:allsets*/ CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
+	_, err := t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-	//if len(t.Meta.PrimaryKeys) > 0 {
-	//	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
-	//}
-	sql = "/*sets:allsets*/ " + sql
+	if len(t.Meta.PrimaryKeys) > 0 {
+		sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
+	}
+	//sql = "/*sets:allsets*/ " + sql
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
@@ -212,7 +212,7 @@ func initTable(t *model.Table) error {
 }
 
 func count(t *model.Table) (int, error) {
-	rows, err := t.DB.Query(fmt.Sprintf("%s SELECT count(0) FROM %s.%s", t.Set, t.Database, t.Name))
+	rows, err := t.DB.Query(fmt.Sprintf("SELECT count(0) FROM %s.%s", t.Database, t.Name))
 	if err != nil {
 		return 0, err
 	}
