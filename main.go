@@ -202,8 +202,12 @@ func initTable(t *model.Table) error {
 	//if len(t.Meta.PrimaryKeys) > 0 {
 	//	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
 	//}
-	sql = "/*sets:allsets*/ " + sql
 	_, err = t.DB.Exec(sql)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	_, err = t.DB.Exec("/*sets:allsets*/ " + sql)
 	if err != nil {
 		log.Error(err)
 		return err
