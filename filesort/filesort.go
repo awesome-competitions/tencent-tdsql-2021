@@ -53,7 +53,7 @@ func (sv *shardLoserValue) Compare(o interface{}) bool {
 		ov.l.exit()
 		return false
 	}
-	ov.l.reelect()
+	ov.l.contest()
 	return sv.Compare(ov)
 }
 
@@ -175,7 +175,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 
 func (fs *FileSorter) Merging() error {
 	tier := 1
-	multi := 5
+	multi := len(fs.shards)
 	for len(fs.shards) > 1 {
 		shards := fs.shards
 		fs.shards = make([]*fileBuffer, 0)
@@ -232,8 +232,8 @@ func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
 	}
 	lt := newLoserTree(losers)
 	buf := bytes.Buffer{}
-	for !lt.root.loser.invalid {
-		l := lt.root.loser
+	for !lt.root().invalid {
+		l := lt.root()
 		v := l.value.(*shardLoserValue)
 		buf.Write(v.row.Buffer.Bytes())
 		if buf.Len() > consts.FileMergeBufferSize {
@@ -248,7 +248,7 @@ func (fs *FileSorter) merging(shards []*fileBuffer, tier int) error {
 			l.exit()
 			continue
 		}
-		l.reelect()
+		l.contest()
 	}
 	if buf.Len() > 0 {
 		_, err = shard.f.Write(buf.Bytes())
