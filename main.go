@@ -52,6 +52,8 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	// tmp
+	tables = tables[:len(tables)-3]
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
@@ -168,11 +170,11 @@ func schedule(fs *filesort.FileSorter) error {
 		}
 		buf.Truncate(buf.Len() - 1)
 		buf.WriteString(";")
-		//_, err = t.DB.Exec(buf.String())
-		//if err != nil {
-		//	log.Error(err)
-		//	return err
-		//}
+		_, err = t.DB.Exec(buf.String())
+		if err != nil {
+			log.Error(err)
+			return err
+		}
 		inserted += consts.InsertBatch
 		if inserted%100*consts.InsertBatch == 0 {
 			log.Infof("table %s inserted %d\n", t, inserted)

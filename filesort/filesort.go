@@ -175,7 +175,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 
 func (fs *FileSorter) Merging() error {
 	tier := 1
-	multi := 5
+	multi := len(fs.shards)
 	for len(fs.shards) > 1 {
 		shards := fs.shards
 		fs.shards = make([]*fileBuffer, 0)
