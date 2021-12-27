@@ -47,6 +47,12 @@ func (lt *loserTree) root() *loser {
 }
 
 func (l *loser) compare(o *loser) bool {
+	if l.invalid {
+		return true
+	}
+	if o.invalid {
+		return false
+	}
 	if l.value == nil {
 		return true
 	}
