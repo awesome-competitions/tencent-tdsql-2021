@@ -179,7 +179,6 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 			}
 		}
 	}
-	distributeSet(db.Set(), tables)
 	return tables, nil
 }
 

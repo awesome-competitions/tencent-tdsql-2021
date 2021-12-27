@@ -20,19 +20,19 @@ func TestLoserTree(t *testing.T) {
 	losers := []*loser{loser1, loser2, loser3, loser4, loser5}
 
 	lt := newLoserTree(losers)
-	t.Log(lt.root.loser.value)
+	t.Log(lt.root().value)
 
 	loser1.value = testLoserValue{k: 2, v: 2}
-	loser1.reelect()
-	t.Log(lt.root.loser.value)
+	loser1.contest()
+	t.Log(lt.root().value)
 
 	loser1.value = testLoserValue{k: 8, v: 8}
-	loser1.reelect()
-	t.Log(lt.root.loser.value)
+	loser1.contest()
+	t.Log(lt.root().value)
 
 	loser2.value = testLoserValue{k: 9, v: 9}
-	loser2.reelect()
-	t.Log(lt.root.loser.value)
+	loser2.contest()
+	t.Log(lt.root().value)
 }
 
 func TestLoserTree1(t *testing.T) {
@@ -44,17 +44,17 @@ func TestLoserTree1(t *testing.T) {
 	losers := []*loser{loser1, loser2, loser3, loser4, loser5}
 
 	lt := newLoserTree(losers)
-	t.Log(lt.root.loser.value)
+	t.Log(lt.root().value)
 
 	loser1.value = testLoserValue{k: 2, v: 2}
-	loser1.reelect()
-	t.Log(lt.root.loser.value)
+	loser1.contest()
+	t.Log(lt.root().value)
 
 	loser1.value = testLoserValue{k: 8, v: 8}
-	loser1.reelect()
-	t.Log(lt.root.loser.value)
+	loser1.contest()
+	t.Log(lt.root().value)
 
 	loser2.value = testLoserValue{k: 9, v: 9}
-	loser2.reelect()
-	t.Log(lt.root.loser.value)
+	loser2.contest()
+	t.Log(lt.root().value)
 }

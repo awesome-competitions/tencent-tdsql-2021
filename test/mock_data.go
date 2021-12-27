@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func main() {
+func _main() {
 	dataPath := "D:\\workspace\\tencent\\data1"
 	dataSourceFiles, err := ioutil.ReadDir(dataPath)
 	if err != nil {
@@ -58,7 +58,7 @@ func main() {
 	fmt.Println(total)
 }
 
-func _main() {
+func main() {
 	dataPath := "D:\\workspace\\tencent\\data1"
 	dataSourceFiles, err := ioutil.ReadDir(dataPath)
 	if err != nil {
@@ -82,7 +82,7 @@ func _main() {
 						panic(err)
 					}
 					log.Infof("write file %s\n", tableFile.Name())
-					for i := 0; i < 10000000; i++ {
+					for i := 0; i < 10000000/3; i++ {
 						id := rand.Intn(10000*100000) + 1
 						filter[id] = true
 						_, _ = f.WriteString(fmt.Sprintf("%d,%f,%s,%s\n", id, rand.Float64(), strings.ReplaceAll(uuid.New(), "-", ""), "2020-12-26 09:56:37"))
