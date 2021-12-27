@@ -90,18 +90,13 @@ func _main() {
 				defer func() {
 					sortLimit <- true
 				}()
-				if fs.Result() == nil {
+				if len(fs.Shards()) == 0 {
 					log.Infof("table %s file sort starting\n", fs.Table())
 					err := fs.Sharding()
 					if err != nil {
 						log.Panic(err)
 					}
 					log.Infof("table %s file sort sharding finished\n", fs.Table())
-					err = fs.Merging()
-					if err != nil {
-						log.Panic(err)
-					}
-					log.Infof("table %s file sort merging finished\n", fs.Table())
 				}
 				fsChan <- fs
 			}()
@@ -134,37 +129,45 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	fb := fs.Result()
 	buf := bytes.Buffer{}
 	offset, err := count(t)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Infof("table %s jumping to %d\n", fs.Table(), offset)
-	err = fb.Jump(offset)
-	if err != nil {
-		return err
-	}
 	log.Infof("table %s start schedule, start from %d\n", fs.Table(), offset)
-	eof := false
-	valid := false
+
+	index := 0
+	buffered := 0
 	inserted := 0
 	header := fmt.Sprintf("INSERT INTO %s.%s(%s) VALUES ", t.Database, t.Name, t.Cols)
-	for !eof {
-		buf.WriteString(header)
-		for i := 0; i < consts.InsertBatch; i++ {
-			row, err := fb.NextRow()
+	buf.WriteString(header)
+	err = fs.Merging(func(row *model.Row) error {
+		if index < offset {
+			return nil
+		}
+		buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+		buffered++
+		inserted++
+		if buffered == consts.InsertBatch {
+			buf.Truncate(buf.Len() - 1)
+			buf.WriteString(";")
+			_, err = t.DB.Exec(buf.String())
 			if err != nil {
-				eof = true
-				break
+				log.Error(err)
+				return err
 			}
-			valid = true
-			buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+			buffered = 0
+			buf.Reset()
+			buf.WriteString(header)
 		}
-		if !valid {
-			break
-		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if buffered > 0 {
 		buf.Truncate(buf.Len() - 1)
 		buf.WriteString(";")
 		_, err = t.DB.Exec(buf.String())
@@ -172,11 +175,6 @@ func schedule(fs *filesort.FileSorter) error {
 			log.Error(err)
 			return err
 		}
-		inserted += consts.InsertBatch
-		if inserted%100*consts.InsertBatch == 0 {
-			log.Infof("table %s inserted %d\n", t, inserted)
-		}
-		buf.Reset()
 	}
 	//fb.Delete()
 	err = t.Recover.Make(2, "")
