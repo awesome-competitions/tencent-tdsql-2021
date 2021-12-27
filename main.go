@@ -29,7 +29,7 @@ var dstPassword *string
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace-tencent\\datatest", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -150,7 +150,7 @@ func schedule(fs *filesort.FileSorter) error {
 	eof := false
 	valid := false
 	inserted := 0
-	header := fmt.Sprintf("INSERT INTO %s.%s(%s) VALUES ", t.Database, t.Name, t.Cols())
+	header := fmt.Sprintf("%sINSERT INTO %s.%s VALUES ", t.Set, t.Database, t.Name)
 	for !eof {
 		buf.WriteString(header)
 		for i := 0; i < consts.InsertBatch; i++ {
@@ -196,10 +196,10 @@ func initTable(t *model.Table) error {
 		log.Error(err)
 		return err
 	}
-	sql := strings.ReplaceAll(string(t.Schema), "not exists ", fmt.Sprintf("not exists %s.", t.Database))
-	if len(t.Meta.PrimaryKeys) > 0 {
-		sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
-	}
+	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
+	//if len(t.Meta.PrimaryKeys) > 0 {
+	//	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
+	//}
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
