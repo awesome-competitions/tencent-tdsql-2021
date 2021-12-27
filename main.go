@@ -191,7 +191,7 @@ func schedule(fs *filesort.FileSorter) error {
 }
 
 func initTable(t *model.Table) error {
-	_, err := t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
+	_, err := t.DB.Exec(fmt.Sprintf("/*sets:allsets*/ CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
 	if err != nil {
 		log.Error(err)
 		return err
@@ -200,7 +200,7 @@ func initTable(t *model.Table) error {
 	//if len(t.Meta.PrimaryKeys) > 0 {
 	//	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
 	//}
-	_, err = t.DB.Exec(sql)
+	_, err = t.DB.Exec("/*sets:allsets*/ " + sql)
 	if err != nil {
 		log.Error(err)
 		return err
