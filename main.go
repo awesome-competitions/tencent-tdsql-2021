@@ -202,11 +202,14 @@ func initTable(t *model.Table) error {
 		return err
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
+	shardKey := ""
 	if len(t.Meta.PrimaryKeys) == 0 {
 		sql = strings.ReplaceAll(sql, ") ENGINE=InnoDB", fmt.Sprintf(",PRIMARY KEY (%s)\n) ENGINE=InnoDB", t.Cols[:strings.LastIndex(t.Cols, ",")]))
-		t.Meta.PrimaryKeys = t.Meta.Cols
+		shardKey = t.Meta.Cols[0]
+	} else {
+		shardKey = t.Meta.PrimaryKeys[0]
 	}
-	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+t.Meta.PrimaryKeys[0])
+	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+shardKey)
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
