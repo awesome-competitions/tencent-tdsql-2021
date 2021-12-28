@@ -192,10 +192,7 @@ func schedule(fs *filesort.FileSorter) error {
 			_, err = t.DB.Exec(sql.String())
 			if err != nil {
 				log.Errorf("table %s sql err: %v\n", t, err)
-				if strings.Contains(err.Error(), "Duplicate entry") {
-					time.Sleep(100 * time.Millisecond)
-					return schedule(fs)
-				} else if strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 					time.Sleep(500 * time.Millisecond)
 					return schedule(fs)
 				}
