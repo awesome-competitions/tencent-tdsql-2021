@@ -55,8 +55,12 @@ func _main() {
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
+	syncLimit := make(chan bool, consts.SyncLimit)
 	for i := 0; i < cap(sortLimit); i++ {
 		sortLimit <- true
+	}
+	for i := 0; i < cap(syncLimit); i++ {
+		syncLimit <- true
 	}
 	fss := make([]*filesort.FileSorter, 0)
 	for i := range tables {
@@ -104,8 +108,10 @@ func _main() {
 	go func() {
 		for {
 			fs := <-fsChan
+			_ = <-syncLimit
 			go func() {
 				defer func() {
+					syncLimit <- true
 					wg.Add(-1)
 				}()
 				err := schedule(fs)
