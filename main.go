@@ -179,6 +179,7 @@ func schedule(fs *filesort.FileSorter) error {
 			return err
 		}
 	}
+	fs.Close()
 	//fb.Delete()
 	err = t.Recover.Make(2, "")
 	if err != nil {
@@ -189,6 +190,7 @@ func schedule(fs *filesort.FileSorter) error {
 		return err
 	}
 	log.Infof("table %s.%s total %d\n", t.Database, t.Name, total)
+
 	return nil
 }
 

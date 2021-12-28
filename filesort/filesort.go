@@ -216,3 +216,16 @@ func (fs *FileSorter) Merging(handle func(row *model.Row) error) error {
 	}
 	return nil
 }
+
+func (fs *FileSorter) Close() {
+	if len(fs.sources) > 0 {
+		for _, s := range fs.sources {
+			_ = s.f.Close()
+		}
+	}
+	if len(fs.shards) > 0 {
+		for _, s := range fs.shards {
+			_ = s.f.Close()
+		}
+	}
+}
