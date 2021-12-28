@@ -124,7 +124,6 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	buf := bytes.Buffer{}
 	offset, err := count(t)
 	if err != nil {
 		log.Error(err)
@@ -133,54 +132,77 @@ func schedule(fs *filesort.FileSorter) error {
 	log.Infof("table %s start schedule, start from %d\n", fs.Table(), offset)
 
 	index := 0
+	batch := 4
 	buffered := 0
 	inserted := 0
+
 	header := fmt.Sprintf("INSERT INTO %s.%s(%s) VALUES ", t.Database, t.Name, t.Cols)
-	buf.WriteString(header)
-	err = fs.Merging(func(row *model.Row) error {
-		if index < offset {
-			index++
+
+	buffers := make(chan *bytes.Buffer, batch)
+	prepared := make(chan *bytes.Buffer, batch)
+	for i := 0; i < cap(buffers); i++ {
+		buf := bytes.Buffer{}
+		buf.WriteString(header)
+		buffers <- &buf
+	}
+	go func() {
+		buf := <-buffers
+		mErr := fs.Merging(func(row *model.Row) error {
+			if index < offset {
+				index++
+				return nil
+			}
+			buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+			buffered++
+			inserted++
+			if buffered == consts.InsertBatch {
+				buf.Truncate(buf.Len() - 1)
+				buf.WriteString(";")
+				prepared <- buf
+				buffered = 0
+				buf = <-buffers
+				buf.Reset()
+				buf.WriteString(header)
+			}
 			return nil
-		}
-		buf.WriteString(fmt.Sprintf("(%s),", row.String()))
-		buffered++
-		inserted++
-		if buffered == consts.InsertBatch {
+		})
+		if buffered > 0 {
 			buf.Truncate(buf.Len() - 1)
 			buf.WriteString(";")
-			_, err = t.DB.Exec(buf.String())
+			prepared <- buf
+		}
+		prepared <- nil
+		if mErr != nil {
+			log.Error(mErr)
+		}
+	}()
+	var sql *bytes.Buffer
+	for {
+		select {
+		case sql = <-prepared:
+			if sql == nil {
+				break
+			}
+			_, err = t.DB.Exec(sql.String())
 			if err != nil {
-				log.Error(err)
+				log.Errorf("table %s sql err: %v\n", t, err)
+				if strings.Contains(err.Error(), "Duplicate entry") {
+					time.Sleep(100 * time.Millisecond)
+					return schedule(fs)
+				} else if strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+					time.Sleep(500 * time.Millisecond)
+					return schedule(fs)
+				}
 				return err
 			}
-			buffered = 0
-			buf.Reset()
-			buf.WriteString(header)
+			buffers <- sql
 		}
-		return nil
-	})
-	if err != nil {
-		log.Errorf("table %s sql err: %v\n", t, err)
-		if strings.Contains(err.Error(), "Duplicate entry") {
-			time.Sleep(100 * time.Millisecond)
-			return schedule(fs)
-		} else if strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-			time.Sleep(500 * time.Millisecond)
-			return schedule(fs)
-		}
-		return err
-	}
-	if buffered > 0 {
-		buf.Truncate(buf.Len() - 1)
-		buf.WriteString(";")
-		_, err = t.DB.Exec(buf.String())
-		if err != nil {
-			log.Error(err)
-			return err
+		if sql == nil {
+			break
 		}
 	}
+
 	fs.Close()
-	//fb.Delete()
 	err = t.Recover.Make(2, "")
 	if err != nil {
 		return err
@@ -190,7 +212,6 @@ func schedule(fs *filesort.FileSorter) error {
 		return err
 	}
 	log.Infof("table %s.%s total %d\n", t.Database, t.Name, total)
-
 	return nil
 }
 
