@@ -233,6 +233,7 @@ func initTable(t *model.Table) error {
 		shardKey = t.Meta.PrimaryKeys[0]
 	}
 	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+shardKey)
+	sql = strings.ReplaceAll(sql, "CHARSET=utf8;", "CHARSET=utf8 PARTITION BY RANGE (id) (\nPARTITION part0 VALUES LESS THAN (429496729), \nPARTITION part1 VALUES LESS THAN (858993458), \nPARTITION part2 VALUES LESS THAN (1288490188), \nPARTITION part3 VALUES LESS THAN (1717986917));")
 	_, err = t.DB.Exec(sql)
 	if err != nil {
 		log.Error(err)
