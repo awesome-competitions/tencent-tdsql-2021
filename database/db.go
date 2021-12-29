@@ -14,13 +14,27 @@ type DB struct {
 }
 
 func New(ip string, port int, user, pwd string) (*DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/?", user, pwd, ip, port))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/?unique_checks=off", user, pwd, ip, port))
 	if err != nil {
 		return nil, err
 	}
 	db.SetConnMaxIdleTime(60 * time.Second)
 	db.SetMaxIdleConns(4)
 	db.SetMaxOpenConns(64)
+
+	//res, err := db.Query("show variables")
+	//if err != nil {
+	//	return nil, err
+	//}
+	//for res.Next() {
+	//	name := ""
+	//	value := ""
+	//	err = res.Scan(&name, &value)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	fmt.Println(name, value)
+	//}
 
 	res, err := db.Query("/*proxy*/ show status")
 	if err != nil {
@@ -38,6 +52,7 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 			set = strings.Split(value, ",")
 		}
 	}
+
 	return &DB{
 		db:  db,
 		set: set,
