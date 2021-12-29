@@ -10,6 +10,7 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
+	"github.com/ainilili/tdsql-competition/util"
 	"strings"
 	"sync"
 	"time"
@@ -141,55 +142,64 @@ func schedule(fs *filesort.FileSorter) error {
 	batch := 4
 	buffered := 0
 	inserted := 0
+	headerLen := 0
 
-	header := fmt.Sprintf("INSERT INTO %s.%s(%s) VALUES ", t.Database, t.Name, t.Cols)
-
-	buffers := make(chan *bytes.Buffer, batch)
-	prepared := make(chan *bytes.Buffer, batch)
-	for i := 0; i < cap(buffers); i++ {
-		buf := bytes.Buffer{}
-		buf.WriteString(header)
-		buffers <- &buf
+	bmap := map[string]*bytes.Buffer{}
+	for _, set := range t.DB.Sets() {
+		bmap[set] = &bytes.Buffer{}
+		bmap[set].WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
+		headerLen = bmap[set].Len()
 	}
+	buffers := make([]*bytes.Buffer, len(t.DB.Hash()))
+	for i, set := range t.DB.Hash() {
+		buffers[i] = bmap[set]
+	}
+	prepared := make(chan string, batch)
 	go func() {
-		buf := <-buffers
+		// todo merging 区分不同分片，count也随着分片走
 		mErr := fs.Merging(func(row *model.Row) error {
 			if index < offset {
 				index++
 				return nil
 			}
+			buf := buffers[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
 			buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+
 			buffered++
 			inserted++
 			if buffered == consts.InsertBatch {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
-				prepared <- buf
+				prepared <- buf.String()
 				buffered = 0
-				buf = <-buffers
-				buf.Reset()
-				buf.WriteString(header)
+				buf.Truncate(headerLen)
 			}
 			return nil
 		})
 		if buffered > 0 {
-			buf.Truncate(buf.Len() - 1)
-			buf.WriteString(";")
-			prepared <- buf
+			for _, buf := range bmap {
+				if buf.Len() == headerLen {
+					continue
+				}
+				buf.Truncate(buf.Len() - 1)
+				buf.WriteString(";")
+				prepared <- buf.String()
+			}
 		}
-		prepared <- nil
+		prepared <- ""
 		if mErr != nil {
 			log.Error(mErr)
 		}
 	}()
-	var sql *bytes.Buffer
-	for {
+	completed := false
+	for !completed {
 		select {
-		case sql = <-prepared:
-			if sql == nil {
+		case buf := <-prepared:
+			if buf == "" {
+				completed = true
 				break
 			}
-			_, err = t.DB.Exec(sql.String())
+			_, err = t.DB.Exec(buf)
 			if err != nil {
 				log.Errorf("table %s sql err: %v\n", t, err)
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
@@ -198,10 +208,6 @@ func schedule(fs *filesort.FileSorter) error {
 				}
 				return err
 			}
-			buffers <- sql
-		}
-		if sql == nil {
-			break
 		}
 	}
 

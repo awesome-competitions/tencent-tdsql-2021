@@ -4,13 +4,15 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"strconv"
 	"strings"
 	"time"
 )
 
 type DB struct {
-	db  *sql.DB
-	set []string
+	db   *sql.DB
+	sets []string
+	hash []string
 }
 
 func New(ip string, port int, user, pwd string) (*DB, error) {
@@ -22,25 +24,13 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	db.SetMaxIdleConns(4)
 	db.SetMaxOpenConns(64)
 
-	//res, err := db.Query("show variables")
-	//if err != nil {
-	//	return nil, err
-	//}
-	//for res.Next() {
-	//	name := ""
-	//	value := ""
-	//	err = res.Scan(&name, &value)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	fmt.Println(name, value)
-	//}
-
 	res, err := db.Query("/*proxy*/ show status")
 	if err != nil {
 		return nil, err
 	}
 	var set []string
+	sets := make([]string, 0)
+	hash := make([]string, 64)
 	for res.Next() {
 		name := ""
 		value := ""
@@ -48,14 +38,21 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		if name == "set" {
-			set = strings.Split(value, ",")
+		if strings.HasSuffix(name, "hash_range") {
+			set := strings.Split(name, ":")[0]
+			sets = append(sets, set)
+			rg := strings.Split(value, "---")
+			left, _ := strconv.ParseInt(rg[0], 10, 64)
+			right, _ := strconv.ParseInt(rg[1], 10, 64)
+			for i := left; i <= right; i++ {
+				hash[right] = set
+			}
 		}
 	}
-
 	return &DB{
-		db:  db,
-		set: set,
+		db:   db,
+		sets: sets,
+		hash: hash,
 	}, nil
 }
 
@@ -71,6 +68,10 @@ func (d *DB) Begin() (*sql.Tx, error) {
 	return d.db.Begin()
 }
 
-func (d *DB) Set() []string {
-	return d.set
+func (d DB) Hash() []string {
+	return d.hash
+}
+
+func (d DB) Sets() []string {
+	return d.sets
 }
