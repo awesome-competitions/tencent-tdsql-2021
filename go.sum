@@ -2,3 +2,7 @@ github.com/go-basic/uuid v1.0.0 h1:Faqtetcr8uwOzR2qp8RSpkahQiv4+BnJhrpuXPOo63M=
 github.com/go-basic/uuid v1.0.0/go.mod h1:yVtVnsXcmaLc9F4Zw7hTV7R0+vtuQw00mdXi+F6tqco=
 github.com/go-sql-driver/mysql v1.5.0 h1:ozyZYNQW3x3HtqT1jira07DN2PArx2v7/mN66gGcHOs=
 github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
+github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
+github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
+github.com/thimmwork/murmur2 v0.0.0-20200607140641-06f23e1341b4 h1:VPtp/Sfk88B+x/W9DtWcECTNBhUJUihwlTmdRdZU0QI=
+github.com/thimmwork/murmur2 v0.0.0-20200607140641-06f23e1341b4/go.mod h1:cxNax0rsg+Kb4F/lVpKRVcPmSYbyBlYOCidKtLuEres=
