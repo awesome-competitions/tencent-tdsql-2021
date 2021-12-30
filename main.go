@@ -134,7 +134,7 @@ func schedule(fs *filesort.FileSorter) error {
 		log.Error(err)
 		return err
 	}
-	log.Infof("table %s start schedule, start from %d\n", fs.Table(), totals)
+	log.Infof("table %s start schedule, start from %v\n", fs.Table(), totals)
 
 	batch := 4
 	buffered := 0
@@ -221,7 +221,7 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("table %s.%s total %d\n", t.Database, t.Name, totals)
+	log.Infof("table %s.%s total %v\n", t.Database, t.Name, totals)
 	return nil
 }
 
