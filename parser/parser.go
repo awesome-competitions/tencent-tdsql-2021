@@ -179,11 +179,19 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 			}
 		}
 	}
-	return tables, nil
+	return distributeTables(tables), nil
 }
 
-func distributeSet(set []string, tables []*model.Table) {
-	for i, t := range tables {
-		t.Set = fmt.Sprintf("/*sets:%s*/ ", set[i%2])
+func distributeTables(tables []*model.Table) []*model.Table {
+	tableMap := map[string][]*model.Table{}
+	for i, table := range tables {
+		tableMap[table.Database] = append(tableMap[table.Database], tables[i])
 	}
+	newTables := make([]*model.Table, 0)
+	for i := range tableMap[tables[0].Database] {
+		for _, ts := range tableMap {
+			newTables = append(newTables, ts[i])
+		}
+	}
+	return newTables
 }
