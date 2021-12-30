@@ -53,8 +53,6 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables = tables[:1]
-
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimit := make(chan bool, consts.SyncLimit)
