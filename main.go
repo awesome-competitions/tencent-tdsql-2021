@@ -30,7 +30,7 @@ var dstPassword *string
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace-tencent\\data1", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -53,6 +53,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	tables = tables[:1]
 
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
@@ -156,7 +157,6 @@ func schedule(fs *filesort.FileSorter) error {
 	}
 	prepared := make(chan string, batch)
 	go func() {
-		// todo merging 区分不同分片，count也随着分片走
 		mErr := fs.Merging(func(row *model.Row) error {
 			if index < offset {
 				index++
@@ -168,11 +168,16 @@ func schedule(fs *filesort.FileSorter) error {
 			buffered++
 			inserted++
 			if buffered == consts.InsertBatch {
-				buf.Truncate(buf.Len() - 1)
-				buf.WriteString(";")
-				prepared <- buf.String()
+				for _, buf := range bmap {
+					if buf.Len() == headerLen {
+						continue
+					}
+					buf.Truncate(buf.Len() - 1)
+					buf.WriteString(";")
+					prepared <- buf.String()
+					buf.Truncate(headerLen)
+				}
 				buffered = 0
-				buf.Truncate(headerLen)
 			}
 			return nil
 		})

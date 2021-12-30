@@ -28,7 +28,6 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	var set []string
 	sets := make([]string, 0)
 	hash := make([]string, 64)
 	for res.Next() {
@@ -45,7 +44,7 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 			left, _ := strconv.ParseInt(rg[0], 10, 64)
 			right, _ := strconv.ParseInt(rg[1], 10, 64)
 			for i := left; i <= right; i++ {
-				hash[right] = set
+				hash[i] = set
 			}
 		}
 	}
