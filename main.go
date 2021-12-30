@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -130,63 +129,62 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	offset, err := count(t)
+	totals, err := count(t)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Infof("table %s start schedule, start from %d\n", fs.Table(), offset)
+	log.Infof("table %s start schedule, start from %d\n", fs.Table(), totals)
 
-	index := 0
 	batch := 4
 	buffered := 0
 	inserted := 0
 	headerLen := 0
 
-	bmap := map[string]*bytes.Buffer{}
+	bufferMap := map[string]*model.SqlBuffer{}
 	for _, set := range t.DB.Sets() {
-		bmap[set] = &bytes.Buffer{}
-		bmap[set].WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
-		headerLen = bmap[set].Len()
+		bufferMap[set] = model.NewSqlBuffer(totals[set], set)
+		bufferMap[set].Buff.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
+		headerLen = bufferMap[set].Buff.Len()
 	}
-	buffers := make([]*bytes.Buffer, len(t.DB.Hash()))
+	buffers := make([]*model.SqlBuffer, len(t.DB.Hash()))
 	for i, set := range t.DB.Hash() {
-		buffers[i] = bmap[set]
+		buffers[i] = bufferMap[set]
 	}
 	prepared := make(chan string, batch)
 	go func() {
 		mErr := fs.Merging(func(row *model.Row) error {
-			if index < offset {
-				index++
+			buf := buffers[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
+			if buf.Index < buf.Offset {
+				buf.Index++
 				return nil
 			}
-			buf := buffers[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
-			buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+			buf.Buff.WriteString(fmt.Sprintf("(%s),", row.String()))
 
 			buffered++
 			inserted++
 			if buffered == consts.InsertBatch {
-				for _, buf := range bmap {
-					if buf.Len() == headerLen {
+				for _, buf := range bufferMap {
+					if buf.Buff.Len() == headerLen {
 						continue
 					}
-					buf.Truncate(buf.Len() - 1)
-					buf.WriteString(";")
-					prepared <- buf.String()
-					buf.Truncate(headerLen)
+					buf.Buff.Truncate(buf.Buff.Len() - 1)
+					buf.Buff.WriteString(";")
+					prepared <- buf.Buff.String()
+					buf.Buff.Truncate(headerLen)
 				}
 				buffered = 0
 			}
 			return nil
 		})
 		if buffered > 0 {
-			for _, buf := range bmap {
-				if buf.Len() == headerLen {
+			for _, buf := range bufferMap {
+				if buf.Buff.Len() == headerLen {
 					continue
 				}
-				buf.Truncate(buf.Len() - 1)
-				buf.WriteString(";")
-				prepared <- buf.String()
+				buf.Buff.Truncate(buf.Buff.Len() - 1)
+				buf.Buff.WriteString(";")
+				prepared <- buf.Buff.String()
 			}
 		}
 		prepared <- ""
@@ -251,18 +249,21 @@ func initTable(t *model.Table) error {
 	return nil
 }
 
-func count(t *model.Table) (int, error) {
-	rows, err := t.DB.Query(fmt.Sprintf("SELECT count(id) FROM %s.%s as a", t.Database, t.Name))
+func count(t *model.Table) (map[string]int, error) {
+	rows, err := t.DB.Query(fmt.Sprintf("/*sets:allsets*/ SELECT count(id) FROM %s.%s as a", t.Database, t.Name))
 	if err != nil {
 		log.Error(err)
-		return 0, err
+		return nil, err
 	}
 	total := 0
+	set := ""
+	totals := map[string]int{}
 	if rows.Next() {
-		err = rows.Scan(&total)
+		err = rows.Scan(&total, &set)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
+		totals[set] = total
 	}
-	return total, nil
+	return totals, nil
 }
