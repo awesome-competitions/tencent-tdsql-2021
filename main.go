@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -152,8 +153,12 @@ func schedule(fs *filesort.FileSorter) error {
 		buffers[i] = bufferMap[set]
 	}
 	prepared := make(chan string, batch)
+	completed := false
 	go func() {
-		mErr := fs.Merging(func(row *model.Row) error {
+		_ = fs.Merging(func(row *model.Row) error {
+			if completed {
+				return errors.New("software interrupt")
+			}
 			buf := buffers[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
 			if buf.Index < buf.Offset {
 				buf.Index++
@@ -188,11 +193,9 @@ func schedule(fs *filesort.FileSorter) error {
 			}
 		}
 		prepared <- ""
-		if mErr != nil {
-			log.Error(mErr)
-		}
+
 	}()
-	completed := false
+
 	for !completed {
 		select {
 		case buf := <-prepared:
@@ -204,6 +207,7 @@ func schedule(fs *filesort.FileSorter) error {
 			if err != nil {
 				log.Errorf("table %s sql err: %v\n", t, err)
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+					completed = true
 					time.Sleep(500 * time.Millisecond)
 					return schedule(fs)
 				}
