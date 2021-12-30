@@ -137,7 +137,6 @@ func schedule(fs *filesort.FileSorter) error {
 	}
 	log.Infof("table %s start schedule, start from %v\n", fs.Table(), totals)
 
-	batch := 4
 	buffered := 0
 	inserted := 0
 	headerLen := 0
@@ -152,7 +151,7 @@ func schedule(fs *filesort.FileSorter) error {
 	for i, set := range t.DB.Hash() {
 		buffers[i] = bufferMap[set]
 	}
-	prepared := make(chan string, batch)
+	prepared := make(chan string, consts.PreparedBatch)
 	completed := false
 	go func() {
 		_ = fs.Merging(func(row *model.Row) error {
