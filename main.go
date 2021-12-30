@@ -128,11 +128,20 @@ func schedule(fs *filesort.FileSorter) error {
 	t := fs.Table()
 	err := initTable(t)
 	if err != nil {
+		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+			time.Sleep(500 * time.Millisecond)
+			return schedule(fs)
+		}
 		return err
 	}
 	totals, err := count(t)
 	if err != nil {
 		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+			time.Sleep(500 * time.Millisecond)
+			return schedule(fs)
+		}
 		return err
 	}
 	log.Infof("table %s start schedule, start from %v\n", fs.Table(), totals)
@@ -220,10 +229,7 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	totals, err = count(t)
-	if err != nil {
-		return err
-	}
+	totals, _ = count(t)
 	log.Infof("table %s.%s total %v\n", t.Database, t.Name, totals)
 	return nil
 }
@@ -232,7 +238,7 @@ func initTable(t *model.Table) error {
 	_, err := t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
 	if err != nil {
 		log.Error(err)
-		return nil
+		return err
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
 	shardKey := ""
@@ -247,7 +253,7 @@ func initTable(t *model.Table) error {
 	if err != nil {
 		log.Error(err)
 		log.Error(sql)
-		return nil
+		return err
 	}
 	return nil
 }
@@ -256,7 +262,7 @@ func count(t *model.Table) (map[string]int, error) {
 	rows, err := t.DB.Query(fmt.Sprintf("/*sets:allsets*/ SELECT count(id) FROM %s.%s as a", t.Database, t.Name))
 	if err != nil {
 		log.Error(err)
-		return nil, nil
+		return nil, err
 	}
 	total := 0
 	set := ""
@@ -264,7 +270,7 @@ func count(t *model.Table) (map[string]int, error) {
 	for rows.Next() {
 		err = rows.Scan(&total, &set)
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
 		totals[set] = total
 	}
