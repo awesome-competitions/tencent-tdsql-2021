@@ -217,11 +217,11 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	total, err := count(t)
+	totals, err = count(t)
 	if err != nil {
 		return err
 	}
-	log.Infof("table %s.%s total %d\n", t.Database, t.Name, total)
+	log.Infof("table %s.%s total %d\n", t.Database, t.Name, totals)
 	return nil
 }
 
