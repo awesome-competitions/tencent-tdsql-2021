@@ -232,7 +232,7 @@ func initTable(t *model.Table) error {
 	_, err := t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil
 	}
 	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
 	shardKey := ""
@@ -247,7 +247,7 @@ func initTable(t *model.Table) error {
 	if err != nil {
 		log.Error(err)
 		log.Error(sql)
-		return err
+		return nil
 	}
 	return nil
 }
@@ -256,7 +256,7 @@ func count(t *model.Table) (map[string]int, error) {
 	rows, err := t.DB.Query(fmt.Sprintf("/*sets:allsets*/ SELECT count(id) FROM %s.%s as a", t.Database, t.Name))
 	if err != nil {
 		log.Error(err)
-		return nil, err
+		return nil, nil
 	}
 	total := 0
 	set := ""
@@ -264,7 +264,7 @@ func count(t *model.Table) (map[string]int, error) {
 	for rows.Next() {
 		err = rows.Scan(&total, &set)
 		if err != nil {
-			return nil, err
+			return nil, nil
 		}
 		totals[set] = total
 	}
