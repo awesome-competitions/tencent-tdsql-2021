@@ -262,7 +262,7 @@ func count(t *model.Table) (map[string]int, error) {
 	total := 0
 	set := ""
 	totals := map[string]int{}
-	if rows.Next() {
+	for rows.Next() {
 		err = rows.Scan(&total, &set)
 		if err != nil {
 			return nil, err
