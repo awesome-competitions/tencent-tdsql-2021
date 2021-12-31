@@ -154,9 +154,8 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) ([]*memBuffer, error) {
 						cur = next
 					}
 				}
-				buf.Write(cur.Buffer.Bytes())
+				shard.Append(cur)
 			}
-			shard.rows = rows
 			shards = append(shards, shard)
 			rows = make(model.Rows, 0)
 			buf.Reset()
