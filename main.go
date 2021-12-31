@@ -10,6 +10,7 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -158,6 +159,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	fb.Reset()
 	err = fb.Jump(total)
 	if err != nil {
+		if err == io.EOF {
+			return nil
+		}
 		log.Error(err)
 		return err
 	}

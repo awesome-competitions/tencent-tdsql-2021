@@ -84,7 +84,10 @@ func (fb *fileBuffer) Jump(c int) error {
 }
 
 func (fb *fileBuffer) Reset() {
-	_, _ = fb.f.Seek(0, io.SeekStart)
+	_, err := fb.f.Seek(0, io.SeekStart)
+	if err != nil {
+		log.Error(err)
+	}
 	fb.buf.reset()
 	fb.pos = 0
 }
