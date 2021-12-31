@@ -113,20 +113,27 @@ func _main() {
 	go func() {
 		for {
 			fs := <-fsChan
-			for key := range fs.Results() {
-				_ = <-syncLimit
-				set := key
-				go func() {
-					defer func() {
-						syncLimit <- true
-						wg.Add(-1)
+			go func() {
+				setWg := sync.WaitGroup{}
+				setWg.Add(len(fs.Results()))
+				for key := range fs.Results() {
+					_ = <-syncLimit
+					set := key
+					go func() {
+						defer func() {
+							syncLimit <- true
+							wg.Add(-1)
+							setWg.Add(-1)
+						}()
+						err := schedule(fs, fs.Table(), set)
+						if err != nil {
+							log.Panic(err)
+						}
 					}()
-					err := schedule(fs, fs.Table(), set)
-					if err != nil {
-						log.Panic(err)
-					}
-				}()
-			}
+				}
+				setWg.Wait()
+				_ = fs.Table().Recover.Make(2, "")
+			}()
 		}
 	}()
 	wg.Wait()
@@ -207,10 +214,6 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				return err
 			}
 		}
-	}
-	err = t.Recover.Make(2, "")
-	if err != nil {
-		return err
 	}
 	total, _ = count(t, set)
 	log.Infof("table %s.%s total %v\n", t, set, total)
