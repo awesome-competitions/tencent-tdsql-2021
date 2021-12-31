@@ -103,7 +103,7 @@ func (fs *FileSorter) Results() map[string]*fileBuffer {
 }
 
 func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
-	f, err := file.New(fmt.Sprintf("%d.result.%s", fs.table.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	f, err := file.New(fmt.Sprintf("D:\\workspace\\tencent\\tmp\\%d.result.%s", fs.table.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
 func (fs *FileSorter) newShard() (*fileBuffer, error) {
 	fs.Lock()
 	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("%d.shard%d", fs.table.ID, len(fs.shards)), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	f, err := file.New(fmt.Sprintf("D:\\workspace\\tencent\\tmp\\%d.shard%d", fs.table.ID, len(fs.shards)), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
