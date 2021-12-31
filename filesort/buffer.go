@@ -2,6 +2,7 @@ package filesort
 
 import (
 	"bytes"
+	"container/list"
 	"github.com/ainilili/tdsql-competition/consts"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
@@ -173,13 +174,13 @@ func (fb *fileBuffer) Delete() {
 
 type memBuffer struct {
 	index int
-	rows  model.Rows
+	rows  *list.List
 }
 
 func newMemBuffer() *memBuffer {
 	return &memBuffer{
 		index: 0,
-		rows:  make(model.Rows, 0),
+		rows:  list.New(),
 	}
 }
 
@@ -187,11 +188,16 @@ func (mb *memBuffer) Reset() {
 	mb.index = 0
 }
 
+func (mb *memBuffer) Append(row *model.Row) {
+	mb.rows.PushBack(row)
+}
+
 func (mb *memBuffer) NextRow() (*model.Row, error) {
 	if mb.index >= mb.rows.Len() {
 		return nil, io.EOF
 	}
-	row := mb.rows[mb.index]
+	row := mb.rows.Front()
+	mb.rows.Remove(row)
 	mb.index++
-	return row, nil
+	return row.Value.(*model.Row), nil
 }
