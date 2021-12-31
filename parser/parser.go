@@ -179,7 +179,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 			}
 		}
 	}
-	return distributeTables(tables), nil
+	return tables, nil
 }
 
 func distributeTables(tables []*model.Table) []*model.Table {
