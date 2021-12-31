@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"bytes"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -10,7 +10,6 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
-	"github.com/ainilili/tdsql-competition/util"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +52,8 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	tables = tables[:1]
+
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimit := make(chan bool, consts.SyncLimit)
@@ -91,133 +92,112 @@ func _main() {
 				defer func() {
 					sortLimit <- true
 				}()
-				if len(fs.Shards()) == 0 {
+				if len(fs.Results()) == 0 {
 					log.Infof("table %s file sort starting\n", fs.Table())
 					err := fs.Sharding()
 					if err != nil {
 						log.Panic(err)
 					}
-					log.Infof("table %s file sort sharding finished\n", fs.Table())
+					err = fs.Merging()
+					if err != nil {
+						log.Panic(err)
+					}
+					log.Infof("table %s file sort merging finished\n", fs.Table())
 				}
 				fsChan <- fs
 			}()
 		}
 	}()
 	wg := sync.WaitGroup{}
-	wg.Add(len(fss))
+	wg.Add(len(fss) * len(db.Sets()))
 	go func() {
 		for {
 			fs := <-fsChan
-			_ = <-syncLimit
-			go func() {
-				defer func() {
-					syncLimit <- true
-					wg.Add(-1)
+			for key := range fs.Results() {
+				_ = <-syncLimit
+				set := key
+				go func() {
+					defer func() {
+						syncLimit <- true
+						wg.Add(-1)
+					}()
+					err := schedule(fs, fs.Table(), set)
+					if err != nil {
+						log.Panic(err)
+					}
 				}()
-				err := schedule(fs)
-				if err != nil {
-					log.Panic(err)
-				}
-			}()
+			}
 		}
 	}()
 	wg.Wait()
 }
 
-func schedule(fs *filesort.FileSorter) error {
-	t := fs.Table()
+func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	err := initTable(t)
 	if err != nil {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs)
+			return schedule(fs, t, set)
 		}
 		return err
 	}
-	totals, err := count(t)
+	total, err := count(t, set)
 	if err != nil {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs)
+			return schedule(fs, t, set)
 		}
 		return err
 	}
-	log.Infof("table %s start schedule, start from %v\n", fs.Table(), totals)
-
-	buffered := 0
-	inserted := 0
-	headerLen := 0
-
-	bufferMap := map[string]*model.SqlBuffer{}
-	for _, set := range t.DB.Sets() {
-		bufferMap[set] = model.NewSqlBuffer(totals[set], set)
-		bufferMap[set].Buff.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
-		headerLen = bufferMap[set].Buff.Len()
-	}
-	buffers := make([]*model.SqlBuffer, len(t.DB.Hash()))
-	for i, set := range t.DB.Hash() {
-		buffers[i] = bufferMap[set]
+	log.Infof("table %s.%s start schedule, start from %v\n", t, set, total)
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
+	headerLen := buf.Len()
+	fb := fs.Results()[set]
+	err = fb.Jump(total)
+	if err != nil {
+		log.Error(err)
+		return err
 	}
 	prepared := make(chan string, consts.PreparedBatch)
 	completed := false
+	eof := false
 	go func() {
-		_ = fs.Merging(func(row *model.Row) error {
-			if completed {
-				return errors.New("software interrupt")
-			}
-			buf := buffers[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
-			if buf.Index < buf.Offset {
-				buf.Index++
-				return nil
-			}
-			buf.Buff.WriteString(fmt.Sprintf("(%s),", row.String()))
-
-			buffered++
-			inserted++
-			if buffered == consts.InsertBatch {
-				for _, buf := range bufferMap {
-					if buf.Buff.Len() == headerLen {
-						continue
-					}
-					buf.Buff.Truncate(buf.Buff.Len() - 1)
-					buf.Buff.WriteString(";")
-					prepared <- buf.Buff.String()
-					buf.Buff.Truncate(headerLen)
+		for !eof {
+			for i := 0; i < consts.InsertBatch; i++ {
+				row, err := fb.NextRow()
+				if err != nil {
+					eof = true
+					break
 				}
-				buffered = 0
+				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
 			}
-			return nil
-		})
-		if buffered > 0 {
-			for _, buf := range bufferMap {
-				if buf.Buff.Len() == headerLen {
-					continue
-				}
-				buf.Buff.Truncate(buf.Buff.Len() - 1)
-				buf.Buff.WriteString(";")
-				prepared <- buf.Buff.String()
+			if buf.Len() > headerLen {
+				buf.Truncate(buf.Len() - 1)
+				buf.WriteString(";")
+				prepared <- buf.String()
+				buf.Truncate(headerLen)
 			}
 		}
 		prepared <- ""
-
 	}()
 
 	for !completed {
 		select {
-		case buf := <-prepared:
-			if buf == "" {
+		case s := <-prepared:
+			if s == "" {
 				completed = true
 				break
 			}
-			_, err = t.DB.Exec(buf)
+			_, err = t.DB.Exec(s)
 			if err != nil {
-				log.Errorf("table %s sql err: %v\n", t, err)
+				log.Errorf("table %s.%s sql err: %v\n", t, set, err)
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 					completed = true
 					time.Sleep(500 * time.Millisecond)
-					return schedule(fs)
+					return schedule(fs, t, set)
 				}
 				return err
 			}
@@ -229,8 +209,8 @@ func schedule(fs *filesort.FileSorter) error {
 	if err != nil {
 		return err
 	}
-	totals, _ = count(t)
-	log.Infof("table %s.%s total %v\n", t.Database, t.Name, totals)
+	total, _ = count(t, set)
+	log.Infof("table %s.%s total %v\n", t, set, total)
 	return nil
 }
 
@@ -258,21 +238,19 @@ func initTable(t *model.Table) error {
 	return nil
 }
 
-func count(t *model.Table) (map[string]int, error) {
-	rows, err := t.DB.Query(fmt.Sprintf("/*sets:allsets*/ SELECT count(id) FROM %s.%s as a", t.Database, t.Name))
+func count(t *model.Table, set string) (int, error) {
+	rows, err := t.DB.Query(fmt.Sprintf("/*sets:%s*/ SELECT count(id) FROM %s.%s as a", set, t.Database, t.Name))
 	if err != nil {
 		log.Error(err)
-		return nil, err
+		return 0, err
 	}
 	total := 0
-	set := ""
-	totals := map[string]int{}
+	str := ""
 	for rows.Next() {
-		err = rows.Scan(&total, &set)
+		err = rows.Scan(&total, &str)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-		totals[set] = total
 	}
-	return totals, nil
+	return total, nil
 }

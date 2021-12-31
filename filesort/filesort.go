@@ -7,6 +7,7 @@ import (
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
+	"github.com/ainilili/tdsql-competition/util"
 	"io"
 	"os"
 	"sort"
@@ -18,6 +19,7 @@ type FileSorter struct {
 	sync.Mutex
 	sources []*fileBuffer
 	shards  []*fileBuffer
+	results map[string]*fileBuffer
 	table   *model.Table
 }
 
@@ -73,17 +75,18 @@ func Recover(table *model.Table, path string) (*FileSorter, error) {
 
 func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 	paths := strings.Split(path, ",")
-	shards := make([]*fileBuffer, 0)
-	for _, p := range paths {
-		result, err := file.New(p, os.O_RDWR)
+	results := map[string]*fileBuffer{}
+	for _, path := range paths {
+		infos := strings.Split(path, ":")
+		f, err := file.New(infos[1], os.O_RDWR)
 		if err != nil {
 			return nil, err
 		}
-		shards = append(shards, newFileBuffer(result, table.Meta))
+		results[infos[0]] = newFileBuffer(f, table.Meta)
 	}
 	return &FileSorter{
-		shards: shards,
-		table:  table,
+		results: results,
+		table:   table,
 	}, nil
 }
 
@@ -93,6 +96,18 @@ func (fs *FileSorter) Table() *model.Table {
 
 func (fs *FileSorter) Shards() []*fileBuffer {
 	return fs.shards
+}
+
+func (fs *FileSorter) Results() map[string]*fileBuffer {
+	return fs.results
+}
+
+func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
+	f, err := file.New(fmt.Sprintf("%d.result.%s", fs.table.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	if err != nil {
+		return nil, err
+	}
+	return newFileBuffer(f, fs.table.Meta), nil
 }
 
 func (fs *FileSorter) newShard() (*fileBuffer, error) {
@@ -181,12 +196,26 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	return nil
 }
 
-func (fs *FileSorter) Merging(handle func(row *model.Row) error) error {
+func (fs *FileSorter) Merging() error {
+	results, err := fs.merging(fs.shards)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	fs.results = results
+	infos := bytes.Buffer{}
+	for set, result := range results {
+		_, _ = result.f.Seek(0, io.SeekStart)
+		infos.WriteString(fmt.Sprintf("%s:%s,", set, result.f.Path()))
+	}
+	infos.Truncate(infos.Len() - 1)
+	return fs.table.Recover.Make(1, infos.String())
+}
+
+func (fs *FileSorter) merging(shards []*fileBuffer) (map[string]*fileBuffer, error) {
 	losers := make([]*loser, 0)
-	for _, shard := range fs.shards {
+	for _, shard := range shards {
 		_, _ = shard.f.Seek(0, io.SeekStart)
-		shard.buf.reset()
-		shard.pos = 0
 		l := &loser{}
 		sv := &shardLoserValue{
 			shard: shard,
@@ -200,21 +229,43 @@ func (fs *FileSorter) Merging(handle func(row *model.Row) error) error {
 		losers = append(losers, l)
 	}
 	lt := newLoserTree(losers)
+	results := map[string]*fileBuffer{}
+	buffers := map[string]*bytes.Buffer{}
+	for _, set := range fs.table.DB.Sets() {
+		buffers[set] = &bytes.Buffer{}
+		results[set], _ = fs.newResult(set)
+	}
 	for !lt.root().invalid {
 		l := lt.root()
 		v := l.value.(*shardLoserValue)
-		err := handle(v.row)
-		if err != nil {
-			return err
+		row := v.row
+
+		set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]
+		buf := buffers[set]
+		buf.Write(row.Buffer.Bytes())
+		if buf.Len() > consts.FileMergeBufferSize {
+			_, err := results[set].f.Write(buf.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			buf.Reset()
 		}
-		err = v.next()
+		err := v.next()
 		if err != nil {
 			l.exit()
 			continue
 		}
 		l.contest()
 	}
-	return nil
+	for set, buf := range buffers {
+		if buf.Len() > 0 {
+			_, err := results[set].f.Write(buf.Bytes())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return results, nil
 }
 
 func (fs *FileSorter) Close() {

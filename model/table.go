@@ -15,7 +15,6 @@ type Table struct {
 	Meta     Meta
 	DB       *database.DB
 	Recover  *rver.Recover
-	Set      string
 	Cols     string
 }
 
