@@ -170,7 +170,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	completed := false
 	eof := false
 	go func() {
-		for !eof {
+		for !eof && !completed {
 			for i := 0; i < consts.InsertBatch; i++ {
 				row, err := fb.NextRow()
 				if err != nil {
