@@ -150,16 +150,17 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		}
 		return err
 	}
-	log.Infof("table %s.%s start schedule, start from %v\n", t, set, total)
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	headerLen := buf.Len()
 	fb := fs.Results()[set]
+	log.Infof("table %s.%s start jump\n", t, set)
 	err = fb.Jump(total)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Infof("table %s.%s start schedule, start from %v\n", t, set, total)
 	prepared := make(chan string, consts.PreparedBatch)
 	completed := false
 	eof := false
