@@ -155,6 +155,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	headerLen := buf.Len()
 	fb := fs.Results()[set]
 	log.Infof("table %s.%s start jump\n", t, set)
+	fb.Reset()
 	err = fb.Jump(total)
 	if err != nil {
 		log.Error(err)

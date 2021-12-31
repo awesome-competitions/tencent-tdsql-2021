@@ -6,6 +6,7 @@ import (
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
+	"io"
 )
 
 type buffer struct {
@@ -80,6 +81,12 @@ func (fb *fileBuffer) Jump(c int) error {
 		fb.pos += int64(capacity)
 	}
 	return nil
+}
+
+func (fb *fileBuffer) Reset() {
+	_, _ = fb.f.Seek(0, io.SeekStart)
+	fb.buf.reset()
+	fb.pos = 0
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
