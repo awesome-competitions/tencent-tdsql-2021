@@ -170,3 +170,28 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 func (fb *fileBuffer) Delete() {
 	_ = fb.f.Delete()
 }
+
+type memBuffer struct {
+	index int
+	rows  model.Rows
+}
+
+func newMemBuffer() *memBuffer {
+	return &memBuffer{
+		index: 0,
+		rows:  make(model.Rows, 0),
+	}
+}
+
+func (mb *memBuffer) Reset() {
+	mb.index = 0
+}
+
+func (mb *memBuffer) NextRow() (*model.Row, error) {
+	if mb.index >= mb.rows.Len() {
+		return nil, io.EOF
+	}
+	row := mb.rows[mb.index]
+	mb.index++
+	return row, nil
+}

@@ -94,15 +94,11 @@ func _main() {
 				}()
 				if len(fs.Results()) == 0 {
 					log.Infof("table %s file sort starting\n", fs.Table())
-					err := fs.Sharding()
+					err := fs.Sorting()
 					if err != nil {
 						log.Panic(err)
 					}
-					err = fs.Merging()
-					if err != nil {
-						log.Panic(err)
-					}
-					log.Infof("table %s file sort merging finished\n", fs.Table())
+					log.Infof("table %s file sort finished\n", fs.Table())
 				}
 				fsChan <- fs
 			}()

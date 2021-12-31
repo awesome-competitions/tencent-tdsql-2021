@@ -18,13 +18,12 @@ import (
 type FileSorter struct {
 	sync.Mutex
 	sources []*fileBuffer
-	shards  []*fileBuffer
 	results map[string]*fileBuffer
 	table   *model.Table
 }
 
 type shardLoserValue struct {
-	shard *fileBuffer
+	shard *memBuffer
 	l     *loser
 	row   *model.Row
 }
@@ -94,10 +93,6 @@ func (fs *FileSorter) Table() *model.Table {
 	return fs.table
 }
 
-func (fs *FileSorter) Shards() []*fileBuffer {
-	return fs.shards
-}
-
 func (fs *FileSorter) Results() map[string]*fileBuffer {
 	return fs.results
 }
@@ -110,46 +105,32 @@ func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
 	return newFileBuffer(f, fs.table.Meta), nil
 }
 
-func (fs *FileSorter) newShard() (*fileBuffer, error) {
-	fs.Lock()
-	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("%d.shard%d", fs.table.ID, len(fs.shards)), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
-	if err != nil {
-		return nil, err
-	}
-	shard := newFileBuffer(f, fs.table.Meta)
-	fs.shards = append(fs.shards, shard)
-	return shard, nil
-}
-
-func (fs *FileSorter) appendShard(shard *fileBuffer) {
-	fs.Lock()
-	defer fs.Unlock()
-	fs.shards = append(fs.shards, shard)
-}
-
-func (fs *FileSorter) Sharding() error {
-	fs.shards = make([]*fileBuffer, 0)
+func (fs *FileSorter) Sorting() error {
 	wg := sync.WaitGroup{}
 	wg.Add(len(fs.sources))
+	shards := make([]*memBuffer, 0)
 	for i := 0; i < len(fs.sources); i++ {
 		source := fs.sources[i]
 		go func() {
 			defer wg.Add(-1)
-			err := fs.shardingSource(source)
+			ss, err := fs.shardingSource(source)
 			if err != nil {
 				log.Error(err)
 			}
+			fs.Lock()
+			defer fs.Unlock()
+			shards = append(shards, ss...)
 		}()
 	}
 	wg.Wait()
-	return nil
+	return fs.Merging(shards)
 }
 
-func (fs *FileSorter) shardingSource(source *fileBuffer) error {
+func (fs *FileSorter) shardingSource(source *fileBuffer) ([]*memBuffer, error) {
 	var lastPos int64
 	buf := bytes.Buffer{}
 	rows := make(model.Rows, 0)
+	shards := make([]*memBuffer, 0)
 	for {
 		row, nextErr := source.NextRow()
 		if row != nil {
@@ -158,10 +139,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
 			lastPos = source.pos
 			sort.Sort(&rows)
-			shard, err := fs.newShard()
-			if err != nil {
-				return err
-			}
+			shard := newMemBuffer()
 			l := rows.Len()
 			for i := 0; i < l; i++ {
 				cur := rows[i]
@@ -178,10 +156,8 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 				}
 				buf.Write(cur.Buffer.Bytes())
 			}
-			_, err = shard.f.Write(buf.Bytes())
-			if err != nil {
-				return err
-			}
+			shard.rows = rows
+			shards = append(shards, shard)
 			rows = make(model.Rows, 0)
 			buf.Reset()
 			if nextErr != nil {
@@ -189,11 +165,11 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 			}
 		}
 	}
-	return nil
+	return shards, nil
 }
 
-func (fs *FileSorter) Merging() error {
-	results, err := fs.merging(fs.shards)
+func (fs *FileSorter) Merging(shards []*memBuffer) error {
+	results, err := fs.merging(shards)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -208,10 +184,10 @@ func (fs *FileSorter) Merging() error {
 	return fs.table.Recover.Make(1, infos.String())
 }
 
-func (fs *FileSorter) merging(shards []*fileBuffer) (map[string]*fileBuffer, error) {
+func (fs *FileSorter) merging(shards []*memBuffer) (map[string]*fileBuffer, error) {
 	losers := make([]*loser, 0)
 	for _, shard := range shards {
-		_, _ = shard.f.Seek(0, io.SeekStart)
+		shard.Reset()
 		l := &loser{}
 		sv := &shardLoserValue{
 			shard: shard,
@@ -267,11 +243,6 @@ func (fs *FileSorter) merging(shards []*fileBuffer) (map[string]*fileBuffer, err
 func (fs *FileSorter) Close() {
 	if len(fs.sources) > 0 {
 		for _, s := range fs.sources {
-			_ = s.f.Close()
-		}
-	}
-	if len(fs.shards) > 0 {
-		for _, s := range fs.shards {
 			_ = s.f.Close()
 		}
 	}
