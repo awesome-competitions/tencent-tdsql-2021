@@ -143,11 +143,7 @@ func (fs *FileSorter) Sharding() error {
 		}()
 	}
 	wg.Wait()
-	path := make([]string, 0)
-	for _, shard := range fs.shards {
-		path = append(path, shard.f.Path())
-	}
-	return fs.table.Recover.Make(1, strings.Join(path, ","))
+	return nil
 }
 
 func (fs *FileSorter) shardingSource(source *fileBuffer) error {
@@ -276,6 +272,11 @@ func (fs *FileSorter) Close() {
 	}
 	if len(fs.shards) > 0 {
 		for _, s := range fs.shards {
+			_ = s.f.Close()
+		}
+	}
+	if len(fs.results) > 0 {
+		for _, s := range fs.results {
 			_ = s.f.Close()
 		}
 	}

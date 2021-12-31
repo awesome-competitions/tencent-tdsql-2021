@@ -203,7 +203,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		}
 	}
 
-	fs.Close()
+	go fs.Close()
 	err = t.Recover.Make(2, "")
 	if err != nil {
 		return err
