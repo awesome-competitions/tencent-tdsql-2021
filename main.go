@@ -150,6 +150,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		return err
 	}
 	total, err := count(t, set)
+	if total == 0 {
+		total = 10
+	}
 	if err != nil {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
