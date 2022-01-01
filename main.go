@@ -175,12 +175,13 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	log.Infof("table %s.%s start schedule, start from %v\n", t, set, total)
 	prepared := make(chan string, consts.PreparedBatch)
 	completed := false
+	sqlErr := false
 	eof := false
 	go func() {
-		for !eof && !completed {
+		for !eof && !sqlErr {
 			for i := 0; i < consts.InsertBatch; i++ {
 				row, err := fb.NextRow()
-				if err != nil {
+				if sqlErr || err != nil {
 					eof = true
 					break
 				}
@@ -193,6 +194,10 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				buf.Truncate(headerLen)
 			}
 		}
+		if sqlErr {
+			prepared <- "sqlErr"
+			return
+		}
 		prepared <- ""
 	}()
 
@@ -203,15 +208,18 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				completed = true
 				break
 			}
+			if s == "sqlErr" {
+				time.Sleep(500 * time.Millisecond)
+				return schedule(fs, t, set)
+			}
 			_, err = t.DB.Exec(s)
 			if err != nil {
 				log.Errorf("table %s.%s sql err: %v\n", t, set, err)
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-					completed = true
-					time.Sleep(500 * time.Millisecond)
-					return schedule(fs, t, set)
+					sqlErr = true
+				} else {
+					return err
 				}
-				return err
 			}
 		}
 	}
