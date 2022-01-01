@@ -19,7 +19,7 @@ type Table struct {
 }
 
 func (t Table) String() string {
-	return t.Database + "." + t.Name
+	return t.Database + "_" + t.Name
 }
 
 type Source struct {

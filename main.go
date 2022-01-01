@@ -162,7 +162,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	headerLen := buf.Len()
 	fb := fs.Results()[set]
-	log.Infof("table %s.%s start jump\n", t, set)
+	log.Infof("table %s_%s start jump\n", t, set)
 	fb.Reset()
 	err = fb.Jump(total)
 	if err != nil {
@@ -172,7 +172,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		log.Error(err)
 		return err
 	}
-	log.Infof("table %s.%s start schedule, start from %v\n", t, set, total)
+	log.Infof("table %s_%s start schedule, start from %v\n", t, set, total)
 	prepared := make(chan string, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
@@ -215,7 +215,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 			if !sqlErr {
 				_, err = t.DB.Exec(s)
 				if err != nil {
-					log.Errorf("table %s.%s sql err: %v\n", t, set, err)
+					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 						sqlErr = true
 					} else {
@@ -225,8 +225,12 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 			}
 		}
 	}
+	if sqlErr {
+		time.Sleep(500 * time.Millisecond)
+		return schedule(fs, t, set)
+	}
 	total, _ = count(t, set)
-	log.Infof("table %s.%s total %v\n", t, set, total)
+	log.Infof("table %s_%s total %v\n", t, set, total)
 	return nil
 }
 
