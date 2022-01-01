@@ -179,6 +179,8 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		totalInt64, _ := strconv.ParseInt(infos[2], 10, 64)
 		total = int(totalInt64)
 	}
+	lastPos = int64(pos)
+	lastTotal = int64(total)
 	fb.Reset(int64(pos))
 	log.Infof("table %s_%s start schedule, start from offset %v\n", t, set, pos)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
@@ -208,8 +210,8 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 					LastPos:   lastPos,
 					LastTotal: lastTotal,
 				}
-				lastTotal = int64(total)
 				lastPos = fb.Position()
+				lastTotal = int64(total)
 				buf.Truncate(headerLen)
 			}
 		}
