@@ -167,6 +167,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	}
 	pos, info, _ := t.SetRecovers[set].Load()
 	infos := strings.Split(info, ",")
+	if len(info) == 0 || len(infos) == 1 {
+		infos = strings.Split("0,0,0", ",")
+	}
 	lastPos, _ := strconv.ParseInt(infos[0], 10, 64)
 	lastTotal, _ := strconv.ParseInt(infos[1], 10, 64)
 	if total == int(lastTotal) {
