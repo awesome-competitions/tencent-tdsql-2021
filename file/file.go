@@ -30,6 +30,10 @@ func (f *File) Path() string {
 	return f.path
 }
 
+func (f *File) Truncate(size int64) error {
+	return f.file.Truncate(0)
+}
+
 func (f *File) WriteAt(offset int64, bytes []byte) error {
 	_, err := f.file.WriteAt(bytes, offset)
 	return err

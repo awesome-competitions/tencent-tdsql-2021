@@ -173,6 +173,7 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 						if err != nil {
 							return nil, err
 						}
+						_ = r.Make(0, "0,0,0")
 						setRecovers[set] = r
 					}
 					t.SetRecovers = setRecovers

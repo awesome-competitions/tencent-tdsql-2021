@@ -10,6 +10,7 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -154,16 +155,36 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	headerLen := buf.Len()
 	fb := fs.Results()[set]
 	log.Infof("table %s_%s start jump\n", t, set)
-	offset, _, _ := t.SetRecovers[set].Load()
-	fb.Reset(int64(offset))
-	log.Infof("table %s_%s start schedule, start from offset %v\n", t, set, offset)
+
+	total, err := count(t, set)
+	if err != nil {
+		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+			time.Sleep(500 * time.Millisecond)
+			return schedule(fs, t, set)
+		}
+		return err
+	}
+	pos, info, _ := t.SetRecovers[set].Load()
+	infos := strings.Split(info, ",")
+	lastPos, _ := strconv.ParseInt(infos[0], 10, 64)
+	lastTotal, _ := strconv.ParseInt(infos[1], 10, 64)
+	if total == int(lastTotal) {
+		pos = int(lastPos)
+	} else {
+		totalInt64, _ := strconv.ParseInt(infos[2], 10, 64)
+		total = int(totalInt64)
+	}
+	fb.Reset(int64(pos))
+	log.Infof("table %s_%s start schedule, start from offset %v\n", t, set, pos)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
 	eof := false
 	go func() {
 		for !eof && !sqlErr {
-			for i := 0; i < consts.InsertBatch; i++ {
+			var i = 0
+			for ; i < consts.InsertBatch; i++ {
 				row, err := fb.NextRow()
 				if sqlErr || err != nil {
 					eof = true
@@ -174,10 +195,16 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 			if buf.Len() > headerLen {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
+				total += i + 1
 				prepared <- model.Sql{
-					Sql: buf.String(),
-					Pos: fb.Position(),
+					Sql:       buf.String(),
+					Pos:       fb.Position(),
+					Total:     int64(total),
+					LastPos:   lastPos,
+					LastTotal: lastTotal,
 				}
+				lastTotal = int64(total)
+				lastPos = fb.Position()
 				buf.Truncate(headerLen)
 			}
 		}
@@ -204,7 +231,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				return schedule(fs, t, set)
 			}
 			if !sqlErr {
-				_ = t.SetRecovers[set].Make(int(s.Pos), "")
+				_ = t.SetRecovers[set].Make(int(s.Pos), fmt.Sprintf("%d,%d,%d", s.LastPos, s.LastTotal, s.Total))
 				_, err = t.DB.Exec(s.Sql)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
@@ -221,7 +248,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, t, set)
 	}
-	total, _ := count(t, set)
+	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
 }

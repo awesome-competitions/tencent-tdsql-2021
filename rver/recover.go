@@ -26,7 +26,11 @@ func (r *Recover) Make(flag int, path string) error {
 	buf := bytes.Buffer{}
 	buf.Write(data)
 	buf.WriteString(path)
-	err := r.file.WriteAt(0, buf.Bytes())
+	err := r.file.Truncate(0)
+	if err != nil {
+		return err
+	}
+	err = r.file.WriteAt(0, buf.Bytes())
 	if err != nil {
 		return err
 	}
