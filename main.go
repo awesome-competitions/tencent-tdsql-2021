@@ -10,7 +10,6 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
-	"io"
 	"strings"
 	"sync"
 	"time"
@@ -149,31 +148,16 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		}
 		return err
 	}
-	total, err := count(t, set)
-	if err != nil {
-		log.Error(err)
-		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, t, set)
-		}
-		return err
-	}
+
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	headerLen := buf.Len()
 	fb := fs.Results()[set]
 	log.Infof("table %s_%s start jump\n", t, set)
-	fb.Reset()
-	err = fb.Jump(total)
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		log.Error(err)
-		return err
-	}
-	log.Infof("table %s_%s start schedule, start from %v\n", t, set, total)
-	prepared := make(chan string, consts.PreparedBatch)
+	offset, _, _ := t.SetRecovers[set].Load()
+	fb.Reset(int64(offset))
+	log.Infof("table %s_%s start schedule, start from offset %v\n", t, set, offset)
+	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
 	eof := false
@@ -190,30 +174,38 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 			if buf.Len() > headerLen {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
-				prepared <- buf.String()
+				prepared <- model.Sql{
+					Sql: buf.String(),
+					Pos: fb.Position(),
+				}
 				buf.Truncate(headerLen)
 			}
 		}
 		if sqlErr {
-			prepared <- "sqlErr"
+			prepared <- model.Sql{
+				Sql: "sqlErr",
+			}
 			return
 		}
-		prepared <- ""
+		prepared <- model.Sql{
+			Sql: "",
+		}
 	}()
 
 	for !completed {
 		select {
 		case s := <-prepared:
-			if s == "" {
+			if s.Sql == "" {
 				completed = true
 				break
 			}
-			if s == "sqlErr" {
+			if s.Sql == "sqlErr" {
 				time.Sleep(500 * time.Millisecond)
 				return schedule(fs, t, set)
 			}
 			if !sqlErr {
-				_, err = t.DB.Exec(s)
+				_ = t.SetRecovers[set].Make(int(s.Pos), "")
+				_, err = t.DB.Exec(s.Sql)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
@@ -229,8 +221,8 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, t, set)
 	}
-	total, _ = count(t, set)
-	log.Infof("table %s_%s total %v\n", t, set, total)
+	total, _ := count(t, set)
+	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
 }
 
@@ -272,6 +264,5 @@ func count(t *model.Table, set string) (int, error) {
 			return 0, err
 		}
 	}
-	total += 10
 	return total, nil
 }

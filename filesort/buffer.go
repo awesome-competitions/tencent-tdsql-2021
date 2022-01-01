@@ -83,13 +83,13 @@ func (fb *fileBuffer) Jump(c int) error {
 	return nil
 }
 
-func (fb *fileBuffer) Reset() {
-	_, err := fb.f.Seek(0, io.SeekStart)
+func (fb *fileBuffer) Reset(offset int64) {
+	_, err := fb.f.Seek(offset, io.SeekStart)
 	if err != nil {
 		log.Error(err)
 	}
 	fb.buf.reset()
-	fb.pos = 0
+	fb.pos = offset
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
@@ -117,6 +117,7 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 	for {
 		for ; fb.buf.pos < fb.buf.cap; fb.buf.pos++ {
 			b := fb.buf.buf[fb.buf.pos]
+			fb.pos++
 			row.Buffer.WriteByte(b)
 			if b == consts.COMMA || b == consts.LF {
 				bs := row.Buffer.Bytes()[start:i]
@@ -161,7 +162,6 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 		fb.readTimes++
 		fb.buf.pos = 0
 		fb.buf.cap = capacity
-		fb.pos += int64(capacity)
 	}
 	row.Key = key.String()
 	return &row, nil
@@ -169,4 +169,8 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 
 func (fb *fileBuffer) Delete() {
 	_ = fb.f.Delete()
+}
+
+func (fb *fileBuffer) Position() int64 {
+	return fb.pos
 }

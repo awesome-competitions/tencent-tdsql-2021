@@ -7,15 +7,16 @@ import (
 )
 
 type Table struct {
-	ID       int
-	Name     string
-	Database string
-	Sources  []Source
-	Schema   string
-	Meta     Meta
-	DB       *database.DB
-	Recover  *rver.Recover
-	Cols     string
+	ID          int
+	Name        string
+	Database    string
+	Sources     []Source
+	Schema      string
+	Meta        Meta
+	DB          *database.DB
+	Recover     *rver.Recover
+	SetRecovers map[string]*rver.Recover
+	Cols        string
 }
 
 func (t Table) String() string {

@@ -104,6 +104,9 @@ type Value struct {
 }
 
 func (v Value) String() string {
+	if v.Type == Char {
+		return v.Source[2:]
+	}
 	return v.Source
 }
 

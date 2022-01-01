@@ -167,6 +167,15 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 							t.Cols += ","
 						}
 					}
+					setRecovers := map[string]*rver.Recover{}
+					for _, set := range db.Sets() {
+						r, err := rver.New(fmt.Sprintf("recover_offset_%d_%s", t.ID, set))
+						if err != nil {
+							return nil, err
+						}
+						setRecovers[set] = r
+					}
+					t.SetRecovers = setRecovers
 					tableId++
 					tables = append(tables, t)
 					tablesMap[dbName] = append(tablesMap[dbName], t)
