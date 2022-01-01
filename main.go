@@ -272,5 +272,6 @@ func count(t *model.Table, set string) (int, error) {
 			return 0, err
 		}
 	}
+	total += 10
 	return total, nil
 }
