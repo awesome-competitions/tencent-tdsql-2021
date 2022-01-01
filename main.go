@@ -186,19 +186,20 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	eof := false
 	go func() {
 		for !eof && !sqlErr {
-			var i = 0
-			for ; i < consts.InsertBatch; i++ {
+			inserted := 0
+			for i := 0; i < consts.InsertBatch; i++ {
 				row, err := fb.NextRow()
 				if sqlErr || err != nil {
 					eof = true
 					break
 				}
 				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+				inserted++
 			}
-			if buf.Len() > headerLen {
+			if inserted > 0 {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
-				total += i + 1
+				total += inserted
 				prepared <- model.Sql{
 					Sql:       buf.String(),
 					Pos:       fb.Position(),
