@@ -172,6 +172,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	}
 	lastPos, _ := strconv.ParseInt(infos[0], 10, 64)
 	lastTotal, _ := strconv.ParseInt(infos[1], 10, 64)
+	log.Infof("table %s_%s position recover, info %s, curr total %d\n", t, set, info, total)
 	if total == int(lastTotal) {
 		pos = int(lastPos)
 	} else {
