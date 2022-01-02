@@ -93,7 +93,7 @@ func _main() {
 					sortLimit <- true
 				}()
 				if len(fs.Results()) == 0 {
-					log.Infof("table %s file sort starting\n", fs.Table())
+					//log.Infof("table %s file sort starting\n", fs.Table())
 					err := fs.Sharding()
 					if err != nil {
 						log.Panic(err)
@@ -102,7 +102,7 @@ func _main() {
 					if err != nil {
 						log.Panic(err)
 					}
-					log.Infof("table %s file sort merging finished\n", fs.Table())
+					//log.Infof("table %s file sort merging finished\n", fs.Table())
 				}
 				fsChan <- fs
 			}()
@@ -172,7 +172,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	}
 	lastPos, _ := strconv.ParseInt(infos[0], 10, 64)
 	lastTotal, _ := strconv.ParseInt(infos[1], 10, 64)
-	log.Infof("table %s_%s position recover, info %s, curr total %d\n", t, set, info, total)
+	//log.Infof("table %s_%s position recover, info %s, curr total %d\n", t, set, info, total)
 	if total == int(lastTotal) {
 		pos = int(lastPos)
 	} else {
