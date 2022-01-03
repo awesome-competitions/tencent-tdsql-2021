@@ -198,7 +198,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	lastPositions = positions
 	lastTotal = total
 	fs.ResetPositions(set, positions)
-	fs.InitLts(set)
+	lt := fs.InitLts(set)
 	log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
@@ -208,7 +208,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		for !eof && !sqlErr {
 			inserted := 0
 			for i := 0; i < consts.InsertBatch; i++ {
-				row, err := fs.Next(set)
+				row, err := fs.Next(lt, set)
 				if sqlErr || err != nil {
 					eof = true
 					break
@@ -216,7 +216,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
 				inserted++
 			}
-			if !fs.HasNext(set) {
+			if !fs.HasNext(lt, set) {
 				eof = true
 			}
 			if inserted > 0 {

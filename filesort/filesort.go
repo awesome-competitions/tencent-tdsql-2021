@@ -19,7 +19,6 @@ type FileSorter struct {
 	sync.Mutex
 	sources []*fileBuffer
 	shards  map[string][]*fileBuffer
-	lts     map[string]*loserTree
 	table   *model.Table
 }
 
@@ -66,7 +65,6 @@ func New(table *model.Table) (*FileSorter, error) {
 	return &FileSorter{
 		sources: sources,
 		table:   table,
-		lts:     map[string]*loserTree{},
 	}, nil
 }
 
@@ -94,12 +92,11 @@ func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 	fs := &FileSorter{
 		shards: shards,
 		table:  table,
-		lts:    map[string]*loserTree{},
 	}
 	return fs, nil
 }
 
-func (fs *FileSorter) InitLts(set string) {
+func (fs *FileSorter) InitLts(set string) *loserTree {
 	losers := make([]*loser, 0)
 	for _, shard := range fs.shards[set] {
 		l := &loser{}
@@ -114,8 +111,7 @@ func (fs *FileSorter) InitLts(set string) {
 		}
 		losers = append(losers, l)
 	}
-	lt := newLoserTree(losers)
-	fs.lts[set] = lt
+	return newLoserTree(losers)
 }
 
 func (fs *FileSorter) Table() *model.Table {
@@ -222,8 +218,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	return nil
 }
 
-func (fs *FileSorter) Next(set string) (*model.Row, error) {
-	lt := fs.lts[set]
+func (fs *FileSorter) Next(lt *loserTree, set string) (*model.Row, error) {
 	if lt.root().invalid {
 		return nil, io.EOF
 	}
@@ -239,8 +234,7 @@ func (fs *FileSorter) Next(set string) (*model.Row, error) {
 	return row, nil
 }
 
-func (fs *FileSorter) HasNext(set string) bool {
-	lt := fs.lts[set]
+func (fs *FileSorter) HasNext(lt *loserTree, set string) bool {
 	return !lt.root().invalid
 }
 
