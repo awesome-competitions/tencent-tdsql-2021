@@ -239,6 +239,11 @@ func (fs *FileSorter) Next(set string) (*model.Row, error) {
 	return row, nil
 }
 
+func (fs *FileSorter) HasNext(set string) bool {
+	lt := fs.lts[set]
+	return !lt.root().invalid
+}
+
 func (fs *FileSorter) LastPositions(set string) []int64 {
 	shards := fs.shards[set]
 	positions := make([]int64, len(shards))

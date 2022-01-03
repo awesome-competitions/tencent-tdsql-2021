@@ -137,6 +137,10 @@ func _main() {
 }
 
 func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
+	fg, record, _ := t.SetRecovers[set].Load()
+	if fg == 1 {
+		return nil
+	}
 	err := initTable(t)
 	if err != nil {
 		log.Error(err)
@@ -167,7 +171,6 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	lastTotal := 0
 	positions := make([]int64, len(fs.Shards()[set]))
 	lastPositions := make([]int64, len(positions))
-	_, record, _ := t.SetRecovers[set].Load()
 	if len(record) > 0 {
 		infos := strings.Split(record, ";")
 		for i, info := range infos {
@@ -213,6 +216,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
 				inserted++
 			}
+			if !fs.HasNext(set) {
+				eof = true
+			}
 			if inserted > 0 {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
@@ -223,8 +229,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				recordBuf.WriteString(fmt.Sprintf("%d,%s;", total, util.JoinInt64(positions, ",")))
 				recordBuf.WriteString(fmt.Sprintf("%d,%s", lastTotal, util.JoinInt64(lastPositions, ",")))
 				prepared <- model.Sql{
-					Sql:    buf.String(),
-					Record: recordBuf.String(),
+					Sql:      buf.String(),
+					Record:   recordBuf.String(),
+					Finished: eof,
 				}
 				lastPositions = positions
 				lastTotal = total
@@ -254,7 +261,11 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				return schedule(fs, t, set)
 			}
 			if !sqlErr {
-				_ = t.SetRecovers[set].Make(0, s.Record)
+				fg := 0
+				if s.Finished {
+					fg = 1
+				}
+				_ = t.SetRecovers[set].Make(fg, s.Record)
 				_, err = t.DB.Exec(s.Sql)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
