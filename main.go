@@ -31,7 +31,7 @@ var dstPassword *string
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace-tencent\\data", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -54,7 +54,6 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimit := make(chan bool, consts.SyncLimit)
@@ -195,6 +194,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	lastPositions = positions
 	lastTotal = total
 	fs.ResetPositions(set, positions)
+	fs.InitLts(set)
 	log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false

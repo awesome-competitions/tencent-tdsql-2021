@@ -66,6 +66,7 @@ func New(table *model.Table) (*FileSorter, error) {
 	return &FileSorter{
 		sources: sources,
 		table:   table,
+		lts:     map[string]*loserTree{},
 	}, nil
 }
 
@@ -93,33 +94,29 @@ func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 	fs := &FileSorter{
 		shards: shards,
 		table:  table,
+		lts:    map[string]*loserTree{},
 	}
-	fs.initLts()
 	return fs, nil
 }
 
-func (fs *FileSorter) initLts() {
-	lts := map[string]*loserTree{}
-	for set, s := range fs.shards {
-		losers := make([]*loser, 0)
-		for _, shard := range s {
-			_, _ = shard.f.Seek(0, io.SeekStart)
-			l := &loser{}
-			sv := &shardLoserValue{
-				shard: shard,
-				l:     l,
-			}
-			l.value = sv
-			err := sv.next()
-			if err != nil {
-				continue
-			}
-			losers = append(losers, l)
+func (fs *FileSorter) InitLts(set string) {
+	losers := make([]*loser, 0)
+	for _, shard := range fs.shards[set] {
+		_, _ = shard.f.Seek(0, io.SeekStart)
+		l := &loser{}
+		sv := &shardLoserValue{
+			shard: shard,
+			l:     l,
 		}
-		lt := newLoserTree(losers)
-		lts[set] = lt
+		l.value = sv
+		err := sv.next()
+		if err != nil {
+			continue
+		}
+		losers = append(losers, l)
 	}
-	fs.lts = lts
+	lt := newLoserTree(losers)
+	fs.lts[set] = lt
 }
 
 func (fs *FileSorter) Table() *model.Table {
@@ -164,17 +161,16 @@ func (fs *FileSorter) Sharding() error {
 		}()
 	}
 	wg.Wait()
-	fs.initLts()
 	path := bytes.Buffer{}
 	for set, shards := range fs.shards {
 		path.WriteString(set + ":")
 		for _, s := range shards {
 			path.WriteString(s.f.Path() + ",")
 		}
-		path.Truncate(path.Len())
+		path.Truncate(path.Len() - 1)
 		path.WriteString(";")
 	}
-	path.Truncate(path.Len())
+	path.Truncate(path.Len() - 1)
 	return fs.table.Recover.Make(1, path.String())
 }
 
@@ -211,12 +207,12 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 						}
 					}
 					buf.Write(cur.Buffer.Bytes())
-					_, err = shard.f.Write(buf.Bytes())
-					if err != nil {
-						return err
-					}
-					buf.Reset()
 				}
+				_, err = shard.f.Write(buf.Bytes())
+				if err != nil {
+					return err
+				}
+				buf.Reset()
 			}
 			rows = map[string]model.Rows{}
 			if nextErr != nil {
