@@ -26,6 +26,7 @@ type fileBuffer struct {
 	meta      model.Meta
 	tags      map[int]bool
 	pos       int64
+	lastPos   int64
 	readTimes int
 }
 
@@ -50,39 +51,6 @@ func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
 	}
 }
 
-func (fb *fileBuffer) Jump(c int) error {
-	if c == 0 {
-		return nil
-	}
-	i := 0
-	eof := false
-	for {
-		for ; fb.buf.pos < fb.buf.cap; fb.buf.pos++ {
-			b := fb.buf.buf[fb.buf.pos]
-			if b == consts.LF {
-				i++
-				if i >= c {
-					eof = true
-					fb.buf.pos++
-					break
-				}
-			}
-		}
-		if eof {
-			break
-		}
-		capacity, err := fb.f.Read(fb.buf.buf)
-		if err != nil {
-			return err
-		}
-		fb.readTimes++
-		fb.buf.pos = 0
-		fb.buf.cap = capacity
-		fb.pos += int64(capacity)
-	}
-	return nil
-}
-
 func (fb *fileBuffer) Reset(offset int64) {
 	_, err := fb.f.Seek(offset, io.SeekStart)
 	if err != nil {
@@ -90,6 +58,7 @@ func (fb *fileBuffer) Reset(offset int64) {
 	}
 	fb.buf.reset()
 	fb.pos = offset
+	fb.lastPos = offset
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
@@ -114,6 +83,7 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 	eof := false
 	upd := fb.meta.ColsIndex["updated_at"]
 	key := bytes.Buffer{}
+	lastPos := fb.pos
 	for {
 		for ; fb.buf.pos < fb.buf.cap; fb.buf.pos++ {
 			b := fb.buf.buf[fb.buf.pos]
@@ -163,6 +133,7 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 		fb.buf.pos = 0
 		fb.buf.cap = capacity
 	}
+	fb.lastPos = lastPos
 	row.Key = key.String()
 	return &row, nil
 }
@@ -173,4 +144,8 @@ func (fb *fileBuffer) Delete() {
 
 func (fb *fileBuffer) Position() int64 {
 	return fb.pos
+}
+
+func (fb *fileBuffer) LastPosition() int64 {
+	return fb.lastPos
 }

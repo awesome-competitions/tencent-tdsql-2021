@@ -54,6 +54,8 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	tables = tables[0:1]
+
 	fsChan := make(chan *filesort.FileSorter, len(tables))
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimit := make(chan bool, consts.SyncLimit)
@@ -176,13 +178,13 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				total = int(n)
 				for i := 1; i < len(nums); i++ {
 					n, _ = strconv.ParseInt(nums[i], 10, 64)
-					positions = append(positions, n)
+					positions[i-1] = n
 				}
 			} else {
 				lastTotal = int(n)
 				for i := 1; i < len(nums); i++ {
 					n, _ = strconv.ParseInt(nums[i], 10, 64)
-					lastPositions = append(lastPositions, n)
+					lastPositions[i-1] = n
 				}
 			}
 		}
@@ -216,7 +218,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
 				total += inserted
-				positions = fs.Positions(set)
+				positions = fs.LastPositions(set)
 
 				recordBuf.Reset()
 				recordBuf.WriteString(fmt.Sprintf("%d,%s;", total, util.JoinInt64(positions, ",")))

@@ -102,7 +102,6 @@ func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 func (fs *FileSorter) InitLts(set string) {
 	losers := make([]*loser, 0)
 	for _, shard := range fs.shards[set] {
-		_, _ = shard.f.Seek(0, io.SeekStart)
 		l := &loser{}
 		sv := &shardLoserValue{
 			shard: shard,
@@ -240,11 +239,11 @@ func (fs *FileSorter) Next(set string) (*model.Row, error) {
 	return row, nil
 }
 
-func (fs *FileSorter) Positions(set string) []int64 {
+func (fs *FileSorter) LastPositions(set string) []int64 {
 	shards := fs.shards[set]
 	positions := make([]int64, len(shards))
 	for i, s := range shards {
-		positions[i] = s.Position()
+		positions[i] = s.LastPosition()
 	}
 	return positions
 }
