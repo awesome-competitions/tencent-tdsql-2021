@@ -93,12 +93,12 @@ func _main() {
 					sortLimit <- true
 				}()
 				if len(fs.Shards()) == 0 {
-					//log.Infof("table %s file sort starting\n", fs.Table())
+					log.Infof("table %s file sort starting\n", fs.Table())
 					err := fs.Sharding()
 					if err != nil {
 						log.Panic(err)
 					}
-					//log.Infof("table %s file sort merging finished\n", fs.Table())
+					log.Infof("table %s file sort finished\n", fs.Table())
 				}
 				fsChan <- fs
 			}()
