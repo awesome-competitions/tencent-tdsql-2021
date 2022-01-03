@@ -10,6 +10,7 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
+	"github.com/ainilili/tdsql-competition/util"
 	"strconv"
 	"strings"
 	"sync"
@@ -92,13 +93,9 @@ func _main() {
 				defer func() {
 					sortLimit <- true
 				}()
-				if len(fs.Results()) == 0 {
+				if len(fs.Shards()) == 0 {
 					//log.Infof("table %s file sort starting\n", fs.Table())
 					err := fs.Sharding()
-					if err != nil {
-						log.Panic(err)
-					}
-					err = fs.Merging()
 					if err != nil {
 						log.Panic(err)
 					}
@@ -115,8 +112,8 @@ func _main() {
 			fs := <-fsChan
 			go func() {
 				setWg := sync.WaitGroup{}
-				setWg.Add(len(fs.Results()))
-				for key := range fs.Results() {
+				setWg.Add(len(fs.Shards()))
+				for key := range fs.Shards() {
 					_ = <-syncLimit
 					set := key
 					go func() {
@@ -151,12 +148,12 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	}
 
 	buf := bytes.Buffer{}
+	recordBuf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	headerLen := buf.Len()
-	fb := fs.Results()[set]
-	log.Infof("table %s_%s start jump\n", t, set)
 
-	total, err := count(t, set)
+	log.Infof("table %s_%s start jump\n", t, set)
+	c, err := count(t, set)
 	if err != nil {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
@@ -165,24 +162,40 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		}
 		return err
 	}
-	pos, info, _ := t.SetRecovers[set].Load()
-	infos := strings.Split(info, ",")
-	if len(info) == 0 || len(infos) == 1 {
-		infos = strings.Split("0,0,0", ",")
+
+	total := 0
+	lastTotal := 0
+	positions := make([]int64, len(fs.Shards()[set]))
+	lastPositions := make([]int64, len(positions))
+	_, record, _ := t.SetRecovers[set].Load()
+	if len(record) > 0 {
+		infos := strings.Split(record, ";")
+		for i, info := range infos {
+			nums := strings.Split(info, ",")
+			n, _ := strconv.ParseInt(nums[0], 10, 64)
+			if i == 0 {
+				total = int(n)
+				for i := 1; i < len(nums); i++ {
+					n, _ = strconv.ParseInt(nums[i], 10, 64)
+					positions = append(positions, n)
+				}
+			} else {
+				lastTotal = int(n)
+				for i := 1; i < len(nums); i++ {
+					n, _ = strconv.ParseInt(nums[i], 10, 64)
+					lastPositions = append(lastPositions, n)
+				}
+			}
+		}
 	}
-	lastPos, _ := strconv.ParseInt(infos[0], 10, 64)
-	lastTotal, _ := strconv.ParseInt(infos[1], 10, 64)
-	//log.Infof("table %s_%s position recover, info %s, curr total %d\n", t, set, info, total)
-	if total == int(lastTotal) {
-		pos = int(lastPos)
-	} else {
-		totalInt64, _ := strconv.ParseInt(infos[2], 10, 64)
-		total = int(totalInt64)
+	if c == int(lastTotal) {
+		positions = lastPositions
+		total = lastTotal
 	}
-	lastPos = int64(pos)
-	lastTotal = int64(total)
-	fb.Reset(int64(pos))
-	log.Infof("table %s_%s start schedule, start from offset %v\n", t, set, pos)
+	lastPositions = positions
+	lastTotal = total
+	fs.ResetPositions(set, positions)
+	log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
@@ -191,7 +204,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		for !eof && !sqlErr {
 			inserted := 0
 			for i := 0; i < consts.InsertBatch; i++ {
-				row, err := fb.NextRow()
+				row, err := fs.Next(set)
 				if sqlErr || err != nil {
 					eof = true
 					break
@@ -203,15 +216,17 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
 				total += inserted
+				positions = fs.Positions(set)
+
+				recordBuf.Reset()
+				recordBuf.WriteString(fmt.Sprintf("%d,%s;", total, util.JoinInt64(positions, ",")))
+				recordBuf.WriteString(fmt.Sprintf("%d,%s", lastTotal, util.JoinInt64(lastPositions, ",")))
 				prepared <- model.Sql{
-					Sql:       buf.String(),
-					Pos:       fb.Position(),
-					Total:     int64(total),
-					LastPos:   lastPos,
-					LastTotal: lastTotal,
+					Sql:    buf.String(),
+					Record: recordBuf.String(),
 				}
-				lastPos = fb.Position()
-				lastTotal = int64(total)
+				lastPositions = positions
+				lastTotal = total
 				buf.Truncate(headerLen)
 			}
 		}
@@ -238,7 +253,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 				return schedule(fs, t, set)
 			}
 			if !sqlErr {
-				_ = t.SetRecovers[set].Make(int(s.Pos), fmt.Sprintf("%d,%d,%d", s.LastPos, s.LastTotal, s.Total))
+				_ = t.SetRecovers[set].Make(0, s.Record)
 				_, err = t.DB.Exec(s.Sql)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
