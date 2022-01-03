@@ -7,10 +7,10 @@ const (
 	M                   = 1024 * K
 	G                   = 1024 * M
 	FileBufferSize      = 64 * K
-	FileSortShardSize   = 1 * M
+	FileSortShardSize   = 32 * M
 	FileMergeBufferSize = 32 * M
 	InsertBatch         = 40 * K
 	FileSortLimit       = 2
-	SyncLimit           = 12
+	SyncLimit           = 100
 	PreparedBatch       = 4
 )
