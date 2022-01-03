@@ -75,7 +75,6 @@ func Recover(table *model.Table, path string) (*FileSorter, error) {
 
 func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 	shards := map[string][]*fileBuffer{}
-	lts := map[string]*loserTree{}
 	setInfos := strings.Split(path, ";")
 	for _, setInfo := range setInfos {
 		infos := strings.Split(setInfo, ":")
@@ -89,6 +88,19 @@ func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 			}
 			s = append(s, newFileBuffer(f, table.Meta))
 		}
+		shards[set] = s
+	}
+	fs := &FileSorter{
+		shards: shards,
+		table:  table,
+	}
+	fs.initLts()
+	return fs, nil
+}
+
+func (fs *FileSorter) initLts() {
+	lts := map[string]*loserTree{}
+	for set, s := range fs.shards {
 		losers := make([]*loser, 0)
 		for _, shard := range s {
 			_, _ = shard.f.Seek(0, io.SeekStart)
@@ -105,14 +117,9 @@ func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
 			losers = append(losers, l)
 		}
 		lt := newLoserTree(losers)
-		shards[set] = s
 		lts[set] = lt
 	}
-	return &FileSorter{
-		shards: shards,
-		table:  table,
-		lts:    lts,
-	}, nil
+	fs.lts = lts
 }
 
 func (fs *FileSorter) Table() *model.Table {
@@ -157,6 +164,7 @@ func (fs *FileSorter) Sharding() error {
 		}()
 	}
 	wg.Wait()
+	fs.initLts()
 	path := bytes.Buffer{}
 	for set, shards := range fs.shards {
 		path.WriteString(set + ":")
