@@ -24,6 +24,11 @@ var dstPort *int
 var dstUser *string
 var dstPassword *string
 
+type Task struct {
+	Fs  *filesort.FileSorter
+	Set string
+}
+
 //  example of parameter parse, the final binary should be able to accept specified parameters as requested
 //
 //  usage example:
@@ -56,7 +61,7 @@ func _main() {
 		log.Panic(err)
 	}
 
-	tasks := make(chan *model.Task, 100)
+	tasks := make(chan *Task, 100)
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimits := map[string]chan bool{}
 	for _, set := range db.Sets() {
@@ -106,7 +111,7 @@ func _main() {
 					log.Infof("table %s file sort finished\n", fs.Table())
 				}
 				for set := range fs.Shards() {
-					tasks <- &model.Task{
+					tasks <- &Task{
 						Fs:  fs,
 						Set: set,
 					}
