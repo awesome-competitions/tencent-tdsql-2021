@@ -127,6 +127,9 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 		}
 		capacity, err := fb.f.Read(fb.buf.buf)
 		if err != nil {
+			if err == io.EOF {
+				fb.lastPos = fb.pos
+			}
 			return nil, err
 		}
 		fb.readTimes++
