@@ -56,14 +56,17 @@ func _main() {
 		log.Panic(err)
 	}
 
-	fsChan := make(chan *filesort.FileSorter, len(tables))
+	tasks := make(chan *model.Task, 100)
 	sortLimit := make(chan bool, consts.FileSortLimit)
-	syncLimit := make(chan bool, consts.SyncLimit)
+	syncLimits := map[string]chan bool{}
+	for _, set := range db.Sets() {
+		syncLimits[set] = make(chan bool, consts.SyncLimit)
+		for i := 0; i < consts.SyncLimit; i++ {
+			syncLimits[set] <- true
+		}
+	}
 	for i := 0; i < cap(sortLimit); i++ {
 		sortLimit <- true
-	}
-	for i := 0; i < cap(syncLimit); i++ {
-		syncLimit <- true
 	}
 	fss := make([]*filesort.FileSorter, 0)
 	for i := range tables {
@@ -102,7 +105,12 @@ func _main() {
 					}
 					log.Infof("table %s file sort finished\n", fs.Table())
 				}
-				fsChan <- fs
+				for set := range fs.Shards() {
+					tasks <- &model.Task{
+						Fs:  fs,
+						Set: set,
+					}
+				}
 			}()
 		}
 	}()
@@ -110,34 +118,26 @@ func _main() {
 	wg.Add(len(fss) * len(db.Sets()))
 	go func() {
 		for {
-			fs := <-fsChan
+			task := <-tasks
 			go func() {
-				setWg := sync.WaitGroup{}
-				setWg.Add(len(fs.Shards()))
-				for key := range fs.Shards() {
-					_ = <-syncLimit
-					set := key
-					go func() {
-						defer func() {
-							syncLimit <- true
-							wg.Add(-1)
-							setWg.Add(-1)
-						}()
-						err := schedule(fs, fs.Table(), set)
-						if err != nil {
-							log.Panic(err)
-						}
-					}()
+				set := task.Set
+				_ = <-syncLimits[set]
+				defer func() {
+					syncLimits[set] <- true
+					wg.Add(-1)
+				}()
+				err := schedule(task.Fs, set)
+				if err != nil {
+					log.Panic(err)
 				}
-				setWg.Wait()
-				_ = fs.Table().Recover.Make(2, "")
 			}()
 		}
 	}()
 	wg.Wait()
 }
 
-func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
+func schedule(fs *filesort.FileSorter, set string) error {
+	t := fs.Table()
 	fg, record, _ := t.SetRecovers[set].Load()
 	if fg == 1 {
 		return nil
@@ -147,7 +147,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, t, set)
+			return schedule(fs, set)
 		}
 		return err
 	}
@@ -163,7 +163,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, t, set)
+			return schedule(fs, set)
 		}
 		return err
 	}
@@ -261,7 +261,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 			}
 			if s.Sql == "sqlErr" {
 				time.Sleep(500 * time.Millisecond)
-				return schedule(fs, t, set)
+				return schedule(fs, set)
 			}
 			if !sqlErr {
 				fg := 0
@@ -285,7 +285,7 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 	}
 	if sqlErr {
 		time.Sleep(500 * time.Millisecond)
-		return schedule(fs, t, set)
+		return schedule(fs, set)
 	}
 	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
