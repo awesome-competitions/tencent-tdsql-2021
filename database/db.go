@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -21,8 +22,8 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 		return nil, err
 	}
 	db.SetConnMaxIdleTime(60 * time.Second)
-	db.SetMaxIdleConns(4)
-	db.SetMaxOpenConns(64)
+	db.SetMaxIdleConns(100)
+	db.SetMaxOpenConns(500)
 
 	res, err := db.Query("/*proxy*/ show status")
 	if err != nil {
@@ -73,4 +74,8 @@ func (d DB) Hash() []string {
 
 func (d DB) Sets() []string {
 	return d.sets
+}
+
+func (d *DB) GetConn(ctx context.Context) (*sql.Conn, error) {
+	return d.db.Conn(ctx)
 }
