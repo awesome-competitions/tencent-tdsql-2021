@@ -266,7 +266,9 @@ func schedule(fs *filesort.FileSorter, t *model.Table, set string) error {
 					fg = 1
 				}
 				_ = t.SetRecovers[set].Make(fg, s.Record)
+				st := time.Now().UnixNano()
 				_, err = t.DB.Exec(s.Sql)
+				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
