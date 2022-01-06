@@ -12,5 +12,6 @@ const (
 	InsertBatch         = 45 * K
 	FileSortLimit       = 2
 	SyncLimit           = 28
+	LowSyncLimit        = 3
 	PreparedBatch       = 3
 )

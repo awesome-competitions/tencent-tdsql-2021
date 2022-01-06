@@ -65,8 +65,12 @@ func _main() {
 	sortLimit := make(chan bool, consts.FileSortLimit)
 	syncLimits := map[string]chan bool{}
 	for _, set := range db.Sets() {
-		syncLimits[set] = make(chan bool, consts.SyncLimit)
-		for i := 0; i < consts.SyncLimit; i++ {
+		limit := consts.SyncLimit
+		if strings.HasSuffix(set, "_1") {
+			limit = consts.LowSyncLimit
+		}
+		syncLimits[set] = make(chan bool, limit)
+		for i := 0; i < limit; i++ {
 			syncLimits[set] <- true
 		}
 	}
