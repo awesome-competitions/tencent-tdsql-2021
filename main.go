@@ -319,6 +319,19 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, set)
 	}
+	if insertBatch > 0 {
+		insertBatch = 0
+		err = tx.Commit()
+		if err != nil {
+			log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+			if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+				sqlErr = true
+			} else {
+				log.Error(err)
+				return err
+			}
+		}
+	}
 	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
