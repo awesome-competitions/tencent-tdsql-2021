@@ -294,6 +294,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, set)
 	}
+	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/commit;")
 	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
