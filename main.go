@@ -281,7 +281,9 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				_ = t.SetRecovers[set].Make(fg, s.Record)
 				st := time.Now().UnixNano()
 				if insertBatch == 0 {
-					tx, err = conn.BeginTx(ctx, nil)
+					tx, err = conn.BeginTx(ctx, &sql.TxOptions{
+						Isolation: sql.LevelReadUncommitted,
+					})
 					if err != nil {
 						log.Error(err)
 						return err
