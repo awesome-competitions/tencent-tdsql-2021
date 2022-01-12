@@ -259,7 +259,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
-	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start TRANSACTION;")
+	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start transaction;")
 	for !completed {
 		select {
 		case s := <-prepared:

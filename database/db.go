@@ -7,7 +7,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type DB struct {
@@ -21,7 +20,8 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetConnMaxIdleTime(60 * time.Second)
+	db.SetConnMaxIdleTime(0)
+	db.SetConnMaxLifetime(0)
 	db.SetMaxIdleConns(100)
 	db.SetMaxOpenConns(500)
 
