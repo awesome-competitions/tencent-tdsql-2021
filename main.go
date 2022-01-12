@@ -259,6 +259,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
+	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start TRANSACTION;")
 	for !completed {
 		select {
 		case s := <-prepared:
@@ -294,7 +295,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, set)
 	}
-	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/commit;")
+	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/ COMMIT;")
 	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
