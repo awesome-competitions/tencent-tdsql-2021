@@ -17,7 +17,7 @@ type DB struct {
 }
 
 func New(ip string, port int, user, pwd string) (*DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, pwd, ip, port))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/?unique_checks=off", user, pwd, ip, port))
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,21 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	db.SetMaxIdleConns(100)
 	db.SetMaxOpenConns(500)
 
-	res, err := db.Query("/*proxy*/ show status")
+	res, err := db.Query("show variables")
+	if err != nil {
+		return nil, err
+	}
+	for res.Next() {
+		name := ""
+		value := ""
+		err = res.Scan(&name, &value)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println(name, value)
+	}
+
+	res, err = db.Query("/*proxy*/ show status")
 	if err != nil {
 		return nil, err
 	}

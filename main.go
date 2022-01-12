@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -37,7 +36,7 @@ type Task struct {
 //  you can test this example by:
 //  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
 func init() {
-	dataPath = flag.String("data_path", "D:\\workspace-tencent\\data", "dir path of source data")
+	dataPath = flag.String("data_path", "D:\\workspace\\tencent\\data", "dir path of source data")
 	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
 	dstPort = flag.Int("dst_port", 113, "port of dst database address")
 	dstUser = flag.String("dst_user", "nico", "user name of dst database")
@@ -256,8 +255,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		}
 	}()
 
-	ctx := context.Background()
-	conn, _ := t.DB.GetConn(ctx)
 	for !completed {
 		select {
 		case s := <-prepared:
@@ -276,7 +273,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				}
 				_ = t.SetRecovers[set].Make(fg, s.Record)
 				st := time.Now().UnixNano()
-				_, err = conn.ExecContext(ctx, s.Sql)
+				_, err = t.DB.Exec(s.Sql)
 				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
