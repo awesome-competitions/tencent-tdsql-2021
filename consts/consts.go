@@ -12,5 +12,5 @@ const (
 	FileSortLimit     = 2
 	SyncLimit         = 28
 	PreparedBatch     = 3
-	CommitBatch       = 2
+	CommitBatch       = 3
 )

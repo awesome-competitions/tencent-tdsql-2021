@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -60,6 +61,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	tables = tables[:1]
 
 	tasks := make(chan *Task, 100)
 	sortLimit := make(chan bool, consts.FileSortLimit)
@@ -259,6 +261,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
 	insertBatch := 0
+	var tx *sql.Tx
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
 	for !completed {
 		select {
@@ -279,9 +282,13 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				_ = t.SetRecovers[set].Make(fg, s.Record)
 				st := time.Now().UnixNano()
 				if insertBatch == 0 {
-					_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start transaction;")
+					tx, err = conn.BeginTx(ctx, nil)
+					if err != nil {
+						log.Error(err)
+						return err
+					}
 				}
-				_, err = conn.ExecContext(ctx, s.Sql)
+				_, err = tx.ExecContext(ctx, s.Sql)
 				insertBatch++
 				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
@@ -289,17 +296,19 @@ func schedule(fs *filesort.FileSorter, set string) error {
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 						sqlErr = true
 					} else {
+						log.Error(err)
 						return err
 					}
 				}
 				if insertBatch == consts.CommitBatch {
 					insertBatch = 0
-					_, err = conn.ExecContext(ctx, "/*sets:"+set+"*/ COMMIT;")
+					err = tx.Commit()
 					if err != nil {
 						log.Errorf("table %s_%s sql err: %v\n", t, set, err)
 						if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 							sqlErr = true
 						} else {
+							log.Error(err)
 							return err
 						}
 					}
