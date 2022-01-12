@@ -17,7 +17,7 @@ type DB struct {
 }
 
 func New(ip string, port int, user, pwd string) (*DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/?unique_checks=off&autocommit=off", user, pwd, ip, port))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/?unique_checks=off&autocommit=false", user, pwd, ip, port))
 	if err != nil {
 		return nil, err
 	}
