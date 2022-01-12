@@ -258,8 +258,8 @@ func schedule(fs *filesort.FileSorter, set string) error {
 
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
+	insertBatch := 0
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
-	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start transaction;")
 	for !completed {
 		select {
 		case s := <-prepared:
@@ -278,7 +278,11 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				}
 				_ = t.SetRecovers[set].Make(fg, s.Record)
 				st := time.Now().UnixNano()
+				if insertBatch == 0 {
+					_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/start transaction;")
+				}
 				_, err = conn.ExecContext(ctx, s.Sql)
+				insertBatch++
 				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
@@ -288,6 +292,18 @@ func schedule(fs *filesort.FileSorter, set string) error {
 						return err
 					}
 				}
+				if insertBatch == consts.CommitBatch {
+					insertBatch = 0
+					_, err = conn.ExecContext(ctx, "/*sets:"+set+"*/ COMMIT;")
+					if err != nil {
+						log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+						if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+							sqlErr = true
+						} else {
+							return err
+						}
+					}
+				}
 			}
 		}
 	}
@@ -295,7 +311,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, set)
 	}
-	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/ COMMIT;")
 	total, _ = count(t, set)
 	log.Infof("table %s_%s finished! total %v\n", t, set, total)
 	return nil
