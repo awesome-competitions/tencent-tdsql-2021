@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -266,7 +265,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
-	var tx *sql.Tx
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
 	for !completed {
 		select {
@@ -286,7 +284,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				}
 				_ = t.SetRecovers[set].Make(fg, s.Record)
 				st := time.Now().UnixNano()
-				tx, err = conn.BeginTx(ctx, nil)
+				tx, err := conn.BeginTx(ctx, nil)
 				if err != nil {
 					log.Error(err)
 					return err
