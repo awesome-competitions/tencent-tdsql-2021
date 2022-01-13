@@ -239,7 +239,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				recordBuf.WriteString(fmt.Sprintf("%d,%s", lastTotal, util.JoinInt64(lastPositions, ",")))
 
 				sqlArr = append(sqlArr, buf.String())
-				if len(sqlArr) == consts.CommitBatch {
+				if len(sqlArr) == consts.CommitBatch || eof {
 					prepared <- model.Sql{
 						Sql:      sqlArr,
 						Record:   recordBuf.String(),
