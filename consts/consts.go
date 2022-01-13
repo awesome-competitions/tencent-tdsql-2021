@@ -8,9 +8,9 @@ const (
 	G                 = 1024 * M
 	FileBufferSize    = 64 * K
 	FileSortShardSize = 1 * M
-	InsertBatch       = 45 * K
+	InsertBatch       = 100
 	FileSortLimit     = 2
 	SyncLimit         = 28
 	PreparedBatch     = 3
-	CommitBatch       = 3
+	CommitBatch       = 100
 )
