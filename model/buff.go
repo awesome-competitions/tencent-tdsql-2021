@@ -1,7 +1,7 @@
 package model
 
 type Sql struct {
-	Sql      string
+	Sql      []string
 	Record   string
 	Finished bool
 }
