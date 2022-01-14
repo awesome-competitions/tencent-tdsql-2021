@@ -266,6 +266,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
 	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
+	wg := sync.WaitGroup{}
 	for !completed {
 		select {
 		case s := <-prepared:
@@ -289,18 +290,26 @@ func schedule(fs *filesort.FileSorter, set string) error {
 					log.Error(err)
 					return err
 				}
-				for _, sqlStr := range s.Sql {
-					_, err = tx.ExecContext(ctx, sqlStr)
-					if err != nil {
-						log.Errorf("table %s_%s sql err: %v\n", t, set, err)
-						if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-							sqlErr = true
-						} else {
-							log.Error(err)
-							return err
+				wg.Add(len(s.Sql))
+				for i := range s.Sql {
+					query := s.Sql[i]
+					go func() {
+						defer func() {
+							wg.Add(-1)
+						}()
+						_, err = tx.ExecContext(ctx, query)
+						if err != nil {
+							log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+							if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+								sqlErr = true
+							} else {
+								log.Error(err)
+								panic(err)
+							}
 						}
-					}
+					}()
 				}
+				wg.Wait()
 				if sqlErr {
 					_ = tx.Rollback()
 				} else {
