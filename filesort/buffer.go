@@ -28,6 +28,10 @@ type fileBuffer struct {
 	pos       int64
 	lastPos   int64
 	readTimes int
+	tmp       bytes.Buffer
+	tms       bytes.Buffer
+	tmk       bytes.Buffer
+	upd       int
 }
 
 func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
@@ -41,6 +45,7 @@ func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
 			tags[meta.ColsIndex[col]] = true
 		}
 	}
+	upd := meta.ColsIndex["updated_at"]
 	return &fileBuffer{
 		buf: &buffer{
 			buf: make([]byte, consts.FileBufferSize),
@@ -48,6 +53,10 @@ func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
 		f:    f,
 		meta: meta,
 		tags: tags,
+		tmp:  bytes.Buffer{},
+		tms:  bytes.Buffer{},
+		tmk:  bytes.Buffer{},
+		upd:  upd,
 	}
 }
 
@@ -62,67 +71,53 @@ func (fb *fileBuffer) Reset(offset int64) {
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
-	row, err := fb._nextRow()
-	if err != nil {
-		return nil, err
-	}
-	if row.Invalid {
-		return fb.NextRow()
-	}
-	return row, nil
-}
-
-func (fb *fileBuffer) _nextRow() (*model.Row, error) {
-	row := model.Row{
-		Values: make([]model.Value, len(fb.meta.Cols)),
-		Buffer: bytes.Buffer{},
-	}
-	i := 0
+	row := model.Row{}
 	index := 0
-	start := 0
-	eof := false
-	upd := fb.meta.ColsIndex["updated_at"]
-	key := bytes.Buffer{}
+	completed := false
 	lastPos := fb.pos
+	fb.tmp.Reset()
+	fb.tmk.Reset()
+	fb.tms.Reset()
 	for {
 		for ; fb.buf.pos < fb.buf.cap; fb.buf.pos++ {
 			b := fb.buf.buf[fb.buf.pos]
 			fb.pos++
-			row.Buffer.WriteByte(b)
 			if b == consts.COMMA || b == consts.LF {
-				bs := row.Buffer.Bytes()[start:i]
-				start = i + 1
-				t := fb.meta.ColsType[fb.meta.Cols[index]]
-				s := string(bs)
-				if index == upd {
+				s := fb.tmp.String()
+				if index == 0 {
+					row.ID = s
+				}
+				if index == fb.upd {
 					row.UpdateAt = s
 				}
-				value, err := model.TypeParser[t](s)
-				if err != nil {
-					log.Error(err)
-					row.Invalid = true
-				}
-				v := model.Value{
-					Type:     t,
-					Value:    value,
-					Source:   s,
-					Sortable: fb.tags[index],
-				}
-				row.Values[index] = v
 				if fb.tags[index] {
-					key.WriteString(v.String())
-					key.WriteRune(':')
+					fb.tmk.WriteString(s)
+				}
+				t := fb.meta.ColsType[fb.meta.Cols[index]]
+				if t.IsString() && s[0] != '\'' {
+					fb.tms.WriteByte('\'')
+					fb.tms.WriteString(s)
+					fb.tms.WriteByte('\'')
+				} else {
+					fb.tms.WriteString(s)
+				}
+				if b == consts.COMMA {
+					fb.tms.WriteByte(consts.COMMA)
 				}
 				index++
+				fb.tmp.Reset()
 				if b == consts.LF {
-					eof = true
+					row.Source = fb.tms.String()
+					row.Key = fb.tmk.String()
+					completed = true
 					fb.buf.pos++
 					break
 				}
+			} else {
+				fb.tmp.WriteByte(b)
 			}
-			i++
 		}
-		if eof {
+		if completed {
 			break
 		}
 		capacity, err := fb.f.Read(fb.buf.buf)
@@ -137,7 +132,6 @@ func (fb *fileBuffer) _nextRow() (*model.Row, error) {
 		fb.buf.cap = capacity
 	}
 	fb.lastPos = lastPos
-	row.Key = key.String()
 	return &row, nil
 }
 

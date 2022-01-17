@@ -1,7 +1,6 @@
 package model
 
 import (
-	"bytes"
 	"strconv"
 )
 
@@ -47,39 +46,18 @@ var TypeParser = map[Type]func(str string) (interface{}, error){
 }
 
 type Row struct {
-	Values   []Value
-	Buffer   bytes.Buffer
+	Source   string
 	Key      string
+	ID       string
 	UpdateAt string
-	Invalid  bool
 }
 
 func (r Row) Compare(or interface{}) bool {
-	for i, v := range r.Values {
-		if !v.Sortable {
-			continue
-		}
-		result := v.Compare(or.(Row).Values[i])
-		if result != 0 {
-			return result > 0
-		}
-	}
-	return false
+	return r.Key > or.(Row).Key
 }
 
 func (r Row) String() string {
-	sql := ""
-	for i, v := range r.Values {
-		if v.Type.IsString() {
-			sql += "'" + v.String() + "'"
-		} else {
-			sql += v.String()
-		}
-		if i < len(r.Values)-1 {
-			sql += ","
-		}
-	}
-	return sql
+	return r.Source
 }
 
 type Rows []*Row

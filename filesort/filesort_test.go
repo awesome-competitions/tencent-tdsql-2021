@@ -10,7 +10,7 @@ import (
 
 func TestFileSorter_Sharding(t *testing.T) {
 	db, _ := database.New("tdsqlshard-n756r9nq.sql.tencentcdb.com", 113, "nico", "Niconico2021@")
-	tables, err := parser.ParseTables(db, "D:\\workspace\\tencent\\data1")
+	tables, err := parser.ParseTables(db, "D:\\workspace-tencent\\data")
 	if err != nil {
 		t.Fatal(err)
 	}

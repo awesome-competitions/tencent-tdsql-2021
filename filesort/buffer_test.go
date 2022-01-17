@@ -12,7 +12,7 @@ import (
 )
 
 func TestFileBuffer(t *testing.T) {
-	f, err := file.New("D:\\workspace\\tencent\\data\\src_a\\a\\1.csv", os.O_RDONLY)
+	f, err := file.New("D:\\workspace-tencent\\data\\src_a\\a\\1.csv", os.O_RDONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
