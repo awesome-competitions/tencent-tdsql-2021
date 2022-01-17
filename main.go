@@ -60,6 +60,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	tables = tables[:1]
 
 	tasks := make(chan *Task, 100)
 	sortLimit := make(chan bool, consts.FileSortLimit)
@@ -209,7 +210,8 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	lastTotal = total
 	fs.ResetPositions(set, positions)
 	lt := fs.InitLts(set)
-	log.Infof("table %s_%s start schedule\n", t, set)
+	log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
+	//log.Infof("table %s_%s start schedule\n", t, set)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
