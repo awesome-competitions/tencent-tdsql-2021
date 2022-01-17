@@ -75,8 +75,10 @@ func _main() {
 			if fg == -1 {
 				return
 			}
+			keys := map[interface{}]bool{}
 			for ; fg < len(t.Sources); fg++ {
-				err := schedule(t, fg, pos)
+				log.Infof("%s sync fg %d\n", t, fg)
+				err := schedule(t, keys, fg, pos)
 				if err != nil {
 					log.Panic(err)
 				}
@@ -90,7 +92,7 @@ func _main() {
 	wg.Wait()
 }
 
-func schedule(t *model.Table, flag int, pos int64) error {
+func schedule(t *model.Table, keys map[interface{}]bool, flag int, pos int64) error {
 	fileBuffer := filesort.NewFileBuffer(t.Sources[flag].File, t.Meta)
 	fileBuffer.Reset(pos)
 
@@ -98,7 +100,6 @@ func schedule(t *model.Table, flag int, pos int64) error {
 	for _, set := range t.DB.Sets() {
 		buffers[set] = &model.Buffer{
 			Buffer: &bytes.Buffer{},
-			Keys:   map[interface{}]bool{},
 		}
 		buffers[set].Buffer.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 		buffers[set].HeaderSize = buffers[set].Buffer.Len()
@@ -116,11 +117,11 @@ func schedule(t *model.Table, flag int, pos int64) error {
 			}
 			buffer := buffers[t.DB.Hash()[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]]
 			key := row.Values[0].Value
-			if _, ok := buffer.Keys[key]; ok {
+			if _, ok := keys[key]; ok {
 				// skip repeat
 				continue
 			}
-			buffer.Keys[key] = true
+			keys[key] = true
 			buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
 			buffer.BufferSize++
 			if buffer.BufferSize >= consts.InsertBatch {
@@ -166,7 +167,7 @@ func schedule(t *model.Table, flag int, pos int64) error {
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 					finished = true
 					time.Sleep(100 * time.Millisecond)
-					return schedule(t, flag, query.Pos)
+					return schedule(t, keys, flag, query.Pos)
 				}
 			}
 		}

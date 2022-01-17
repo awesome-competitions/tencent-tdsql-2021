@@ -6,7 +6,6 @@ type Buffer struct {
 	Buffer     *bytes.Buffer
 	BufferSize int
 	HeaderSize int
-	Keys       map[interface{}]bool
 }
 
 func (b *Buffer) Reset() {
