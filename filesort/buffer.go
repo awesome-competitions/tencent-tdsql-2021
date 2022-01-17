@@ -30,7 +30,7 @@ type fileBuffer struct {
 	readTimes int
 }
 
-func newFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
+func NewFileBuffer(f *file.File, meta model.Meta) *fileBuffer {
 	cols := meta.PrimaryKeys
 	if len(cols) == 0 {
 		cols = meta.Cols

@@ -1,7 +1,20 @@
 package model
 
-type Sql struct {
-	Sql      []string
-	Record   string
-	Finished bool
+import "bytes"
+
+type Buffer struct {
+	Buffer     *bytes.Buffer
+	BufferSize int
+	HeaderSize int
+	Keys       map[interface{}]bool
+}
+
+func (b *Buffer) Reset() {
+	b.BufferSize = 0
+	b.Buffer.Truncate(b.HeaderSize)
+}
+
+type Query struct {
+	Sql string
+	Pos int64
 }

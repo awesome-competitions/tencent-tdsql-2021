@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -12,7 +11,7 @@ import (
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
 	"github.com/ainilili/tdsql-competition/util"
-	"strconv"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -23,11 +22,6 @@ var dstIP *string
 var dstPort *int
 var dstUser *string
 var dstPassword *string
-
-type Task struct {
-	Fs  *filesort.FileSorter
-	Set string
-}
 
 //  example of parameter parse, the final binary should be able to accept specified parameters as requested
 //
@@ -60,281 +54,123 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-
-	tasks := make(chan *Task, 100)
-	sortLimit := make(chan bool, consts.FileSortLimit)
-	syncLimits := map[string]chan bool{}
-	limit := consts.SyncLimit
-	for _, set := range db.Sets() {
-		syncLimits[set] = make(chan bool, limit)
-		for i := 0; i < limit; i++ {
-			syncLimits[set] <- true
-		}
-	}
-	for i := 0; i < cap(sortLimit); i++ {
-		sortLimit <- true
-	}
-	fss := make([]*filesort.FileSorter, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(len(tables))
 	for i := range tables {
-		fg, path, err := tables[i].Recover.Load()
+		fg, pos, err := tables[i].Recover.Load()
 		if err != nil {
 			log.Panic(err)
 		}
-		if fg == 0 {
-			fs, err := filesort.New(tables[i])
-			if err != nil {
-				log.Panic(err)
-			}
-			fss = append(fss, fs)
-		} else if fg == 1 {
-			fs, err := filesort.Recover(tables[i], path)
-			if err != nil {
-				log.Panic(err)
-			}
-			fss = append(fss, fs)
-		}
-	}
-
-	go func() {
-		for i := range fss {
-			_ = <-sortLimit
-			fs := fss[i]
-			go func() {
-				defer func() {
-					sortLimit <- true
-				}()
-				if len(fs.Shards()) == 0 {
-					log.Infof("table %s file sort starting\n", fs.Table())
-					err := fs.Sharding()
-					if err != nil {
-						log.Panic(err)
-					}
-					log.Infof("table %s file sort finished\n", fs.Table())
-				}
-				for set := range fs.Shards() {
-					tasks <- &Task{
-						Fs:  fs,
-						Set: set,
-					}
-				}
+		t := tables[i]
+		go func() {
+			defer func() {
+				wg.Add(-1)
 			}()
-		}
-	}()
-	wg := sync.WaitGroup{}
-	wg.Add(len(fss) * len(db.Sets()))
-	go func() {
-		for {
-			task := <-tasks
-			go func() {
-				set := task.Set
-				_ = <-syncLimits[set]
-				defer func() {
-					syncLimits[set] <- true
-					wg.Add(-1)
-				}()
-				err := schedule(task.Fs, set)
+			if fg == 0 {
+				err := initTable(t)
 				if err != nil {
 					log.Panic(err)
 				}
-			}()
-		}
-	}()
+			}
+			if fg == -1 {
+				return
+			}
+			for ; fg < len(t.Sources); fg++ {
+				err := schedule(t, fg, pos)
+				if err != nil {
+					log.Panic(err)
+				}
+			}
+			err = t.Recover.Make(-1, 0)
+			if err != nil {
+				log.Panic(err)
+			}
+		}()
+	}
 	wg.Wait()
 }
 
-func schedule(fs *filesort.FileSorter, set string) error {
-	t := fs.Table()
-	fg, record, _ := t.SetRecovers[set].Load()
-	if fg == 1 {
-		return nil
-	}
-	err := initTable(t)
-	if err != nil {
-		log.Error(err)
-		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, set)
-		}
-		return err
-	}
+func schedule(t *model.Table, flag int, pos int64) error {
+	fileBuffer := filesort.NewFileBuffer(t.Sources[flag].File, t.Meta)
+	fileBuffer.Reset(pos)
 
-	buf := bytes.Buffer{}
-	recordBuf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
-	headerLen := buf.Len()
-
-	log.Infof("table %s_%s start jump\n", t, set)
-	c, err := count(t, set)
-	if err != nil {
-		log.Error(err)
-		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, set)
+	buffers := map[string]*model.Buffer{}
+	for _, set := range t.DB.Sets() {
+		buffers[set] = &model.Buffer{
+			Buffer: &bytes.Buffer{},
+			Keys:   map[interface{}]bool{},
 		}
-		return err
+		buffers[set].Buffer.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
+		buffers[set].HeaderSize = buffers[set].Buffer.Len()
 	}
-
-	total := 0
-	lastTotal := 0
-	positions := make([]int64, len(fs.Shards()[set]))
-	lastPositions := make([]int64, len(positions))
-	if len(record) > 0 {
-		infos := strings.Split(record, ";")
-		for i, info := range infos {
-			nums := strings.Split(info, ",")
-			n, _ := strconv.ParseInt(nums[0], 10, 64)
-			if i == 0 {
-				total = int(n)
-				for i := 1; i < len(nums); i++ {
-					n, _ = strconv.ParseInt(nums[i], 10, 64)
-					positions[i-1] = n
-				}
-			} else {
-				lastTotal = int(n)
-				for i := 1; i < len(nums); i++ {
-					n, _ = strconv.ParseInt(nums[i], 10, 64)
-					lastPositions[i-1] = n
-				}
-			}
-		}
-	}
-	if c == int(lastTotal) {
-		positions = lastPositions
-		total = lastTotal
-	}
-	lastPositions = positions
-	lastTotal = total
-	fs.ResetPositions(set, positions)
-	lt := fs.InitLts(set)
-	log.Infof("table %s_%s start schedule\n", t, set)
-	prepared := make(chan model.Sql, consts.PreparedBatch)
-	completed := false
-	sqlErr := false
-	eof := false
-	sqlArr := make([]string, 0)
+	queries := make(chan model.Query, consts.PreparedBatch)
+	finished := false
 	go func() {
-		for !eof && !sqlErr {
-			inserted := 0
-			for i := 0; i < consts.InsertBatch; i++ {
-				row, err := fs.Next(lt, set)
-				if sqlErr || err != nil {
-					eof = true
+		for !finished {
+			row, err := fileBuffer.NextRow()
+			if err != nil {
+				if err == io.EOF {
 					break
 				}
-				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
-				inserted++
+				log.Panic(err)
 			}
-			if !fs.HasNext(lt, set) {
-				eof = true
+			buffer := buffers[t.DB.Hash()[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]]
+			key := row.Values[0].Value
+			if _, ok := buffer.Keys[key]; ok {
+				// skip repeat
+				continue
 			}
-			if inserted > 0 {
-				buf.Truncate(buf.Len() - 1)
-				buf.WriteString(";")
-				total += inserted
-				positions = fs.LastPositions(set)
-
-				recordBuf.Reset()
-				recordBuf.WriteString(fmt.Sprintf("%d,%s;", total, util.JoinInt64(positions, ",")))
-				recordBuf.WriteString(fmt.Sprintf("%d,%s", lastTotal, util.JoinInt64(lastPositions, ",")))
-
-				sqlArr = append(sqlArr, buf.String())
-				if len(sqlArr) == consts.CommitBatch || eof {
-					prepared <- model.Sql{
-						Sql:      sqlArr,
-						Record:   recordBuf.String(),
-						Finished: eof,
-					}
-					sqlArr = make([]string, 0)
+			buffer.Keys[key] = true
+			buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
+			buffer.BufferSize++
+			if buffer.BufferSize >= consts.InsertBatch {
+				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
+				buffer.Buffer.WriteString(";")
+				queries <- model.Query{
+					Sql: buffer.Buffer.String(),
+					Pos: fileBuffer.Position(),
 				}
-
-				lastPositions = positions
-				lastTotal = total
-				buf.Truncate(headerLen)
+				buffer.Reset()
 			}
 		}
-		if sqlErr {
-			prepared <- model.Sql{
-				Sql: []string{"sqlErr"},
+		for _, buffer := range buffers {
+			if buffer.BufferSize > 0 {
+				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
+				buffer.Buffer.WriteString(";")
+				queries <- model.Query{
+					Sql: buffer.Buffer.String(),
+					Pos: fileBuffer.Position(),
+				}
+				buffer.Reset()
 			}
-			return
 		}
-		prepared <- model.Sql{
-			Sql: []string{""},
+		queries <- model.Query{
+			Sql: "break",
 		}
 	}()
 
-	ctx := context.Background()
-	conn, _ := t.DB.GetConn(ctx)
-	_, _ = conn.ExecContext(ctx, "/*sets:"+set+"*/set autocommit=0;")
-	wg := sync.WaitGroup{}
-	for !completed {
+	for {
 		select {
-		case s := <-prepared:
-			if s.Sql[0] == "" {
-				completed = true
-				break
+		case query := <-queries:
+			if query.Sql == "break" {
+				return nil
 			}
-			if s.Sql[0] == "sqlErr" {
-				time.Sleep(500 * time.Millisecond)
-				return schedule(fs, set)
+			err := t.Recover.Make(flag, query.Pos)
+			if err != nil {
+				log.Error(err)
+				return err
 			}
-			if !sqlErr {
-				fg := 0
-				if s.Finished {
-					fg = 1
-				}
-				_ = t.SetRecovers[set].Make(fg, s.Record)
-				st := time.Now().UnixNano()
-				tx, err := conn.BeginTx(ctx, nil)
-				if err != nil {
-					log.Error(err)
-					return err
-				}
-				wg.Add(len(s.Sql))
-				for i := range s.Sql {
-					query := s.Sql[i]
-					go func() {
-						defer func() {
-							wg.Add(-1)
-						}()
-						_, err = tx.ExecContext(ctx, query)
-						if err != nil {
-							log.Errorf("table %s_%s sql err: %v\n", t, set, err)
-							if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-								sqlErr = true
-							} else {
-								log.Error(err)
-								panic(err)
-							}
-						}
-					}()
-				}
-				wg.Wait()
-				if sqlErr {
-					_ = tx.Rollback()
-				} else {
-					err = tx.Commit()
-					if err != nil {
-						log.Errorf("table %s_%s sql err: %v\n", t, set, err)
-						if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-							sqlErr = true
-						} else {
-							log.Error(err)
-							return err
-						}
-					}
-					log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
+			_, err = t.DB.Exec(query.Sql)
+			if err != nil {
+				log.Error(err)
+				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+					finished = true
+					time.Sleep(100 * time.Millisecond)
+					return schedule(t, flag, query.Pos)
 				}
 			}
 		}
 	}
-	if sqlErr {
-		time.Sleep(500 * time.Millisecond)
-		return schedule(fs, set)
-	}
-	total, _ = count(t, set)
-	log.Infof("table %s_%s finished! total %v\n", t, set, total)
-	return nil
 }
 
 func initTable(t *model.Table) error {
