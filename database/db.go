@@ -25,6 +25,29 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	db.SetMaxIdleConns(100)
 	db.SetMaxOpenConns(500)
 
+	// test
+	//ctx := context.Background()
+	//conn, _ := db.Conn(ctx)
+	//_, err = conn.ExecContext(ctx, "/*sets:set_1639632523_7*/ set @@sql_mode=NO_ENGINE_SUBSTITUTION;")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//res, err := conn.QueryContext(ctx, "/*sets:set_1639632523_7*/ show variables like '%sql_mode%';")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//a := ""
+	//b := ""
+	//c := ""
+	//for res.Next() {
+	//	err = res.Scan(&a, &b, &c)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	fmt.Println(a, b, c)
+	//}
+	//panic(1)
+
 	res, err := db.Query("/*proxy*/ show status")
 	if err != nil {
 		return nil, err
