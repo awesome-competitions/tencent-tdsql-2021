@@ -164,7 +164,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	headerLen := buf.Len()
 
 	log.Infof("table %s_%s start jump\n", t, set)
-	s := time.Now().UnixNano()
 	c, err := count(t, set)
 	if err != nil {
 		log.Error(err)
@@ -174,7 +173,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		}
 		return err
 	}
-	log.Infof("table %s_%s count sum %d\n", t, set, (time.Now().UnixNano()-s)/1e6)
 
 	total := 0
 	lastTotal := 0
@@ -207,7 +205,9 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	lastPositions = positions
 	lastTotal = total
 	fs.ResetPositions(set, positions)
+	s := time.Now().UnixNano()
 	lt := fs.InitLts(set)
+	log.Infof("table %s_%s count sum %d\n", t, set, (time.Now().UnixNano()-s)/1e6)
 	//log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
 	log.Infof("table %s_%s start schedule\n", t, set)
 	prepared := make(chan model.Sql, consts.PreparedBatch)
