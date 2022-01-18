@@ -219,7 +219,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 }
 
 func (fs *FileSorter) Next(lt *loserTree, set string) (*model.Row, error) {
-	if len(lt.losers) == 0 || lt.root() == nil || lt.root().invalid {
+	if !fs.HasNext(lt, set) {
 		return nil, io.EOF
 	}
 	l := lt.root()
@@ -235,7 +235,7 @@ func (fs *FileSorter) Next(lt *loserTree, set string) (*model.Row, error) {
 }
 
 func (fs *FileSorter) HasNext(lt *loserTree, set string) bool {
-	return !lt.root().invalid
+	return !(len(lt.losers) == 0 || lt.root() == nil || lt.root().invalid)
 }
 
 func (fs *FileSorter) LastPositions(set string) []int64 {
