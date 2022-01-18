@@ -268,6 +268,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		case s := <-prepared:
 			if s.Sql == "" {
 				completed = true
+				_ = t.SetRecovers[set].Make(1, s.Record)
 				break
 			}
 			if s.Sql == "sqlErr" {
@@ -275,11 +276,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				return schedule(fs, set)
 			}
 			if !sqlErr {
-				fg := 0
-				if s.Finished {
-					fg = 1
-				}
-				_ = t.SetRecovers[set].Make(fg, s.Record)
+				_ = t.SetRecovers[set].Make(0, s.Record)
 				st := time.Now().UnixNano()
 				_, err = conn.ExecContext(ctx, s.Sql)
 				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
