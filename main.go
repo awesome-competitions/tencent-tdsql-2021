@@ -259,6 +259,11 @@ func schedule(fs *filesort.FileSorter, set string) error {
 
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
+	_, err = conn.ExecContext(ctx, fmt.Sprintf("/*sets:%s*/ set @@sql_mode=NO_ENGINE_SUBSTITUTION;", set))
+	if err != nil {
+		log.Error(err)
+		return err
+	}
 	for !completed {
 		select {
 		case s := <-prepared:
