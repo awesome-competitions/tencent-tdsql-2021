@@ -266,14 +266,14 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	for !completed {
 		select {
 		case s := <-prepared:
+			if s.Sql == "sqlErr" {
+				time.Sleep(500 * time.Millisecond)
+				return schedule(fs, set)
+			}
 			if s.Sql == "" {
 				completed = true
 				_ = t.SetRecovers[set].Make(1, s.Record)
 				break
-			}
-			if s.Sql == "sqlErr" {
-				time.Sleep(500 * time.Millisecond)
-				return schedule(fs, set)
 			}
 			if !sqlErr {
 				_ = t.SetRecovers[set].Make(0, s.Record)
