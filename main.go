@@ -234,7 +234,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 			if inserted > 0 {
 				if inserted < consts.InsertBatch-1 {
 					log.Info("plz killed")
-					time.Sleep(5 * time.Second)
+					time.Sleep(10 * time.Second)
 				}
 				buf.Truncate(buf.Len() - 1)
 				buf.WriteString(";")
