@@ -250,7 +250,9 @@ func (fs *FileSorter) LastPositions(set string) []int64 {
 func (fs *FileSorter) ResetPositions(set string, positions []int64) {
 	shards := fs.shards[set]
 	for i, s := range shards {
-		s.Reset(positions[i])
+		if positions[i] > 0 {
+			s.Reset(positions[i])
+		}
 	}
 }
 
