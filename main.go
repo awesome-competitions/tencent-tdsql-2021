@@ -60,7 +60,7 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables = tables[:1]
+	tables = tables[2:3]
 
 	tasks := make(chan *Task, 100)
 	sortLimit := make(chan bool, consts.FileSortLimit)
