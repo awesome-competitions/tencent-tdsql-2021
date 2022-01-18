@@ -207,6 +207,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 				if err != nil {
 					return err
 				}
+				shard.Reset(0)
 				buf.Reset()
 			}
 			rows = map[string]model.Rows{}
