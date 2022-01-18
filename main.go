@@ -272,7 +272,9 @@ func schedule(fs *filesort.FileSorter, set string) error {
 			}
 			if s.Sql == "" {
 				completed = true
-				_ = t.SetRecovers[set].Make(1, s.Record)
+				if !sqlErr {
+					_ = t.SetRecovers[set].Make(1, s.Record)
+				}
 				break
 			}
 			if !sqlErr {
