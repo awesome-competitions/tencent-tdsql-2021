@@ -138,7 +138,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 						buffer.Buffer.WriteString(";")
 						sql = append(sql, buffer.Buffer.String())
 					}
-					buffer.Buffer.Reset()
+					buffer.Reset()
 				}
 				queries <- model.Query{
 					Sql: sql,
