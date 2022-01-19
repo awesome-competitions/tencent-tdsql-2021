@@ -22,7 +22,7 @@ func New(ip string, port int, user, pwd string) (*DB, error) {
 	}
 	db.SetConnMaxIdleTime(0)
 	db.SetConnMaxLifetime(0)
-	db.SetMaxIdleConns(100)
+	db.SetMaxIdleConns(200)
 	db.SetMaxOpenConns(500)
 
 	//ctx := context.Background()

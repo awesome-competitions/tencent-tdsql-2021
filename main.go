@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"github.com/ainilili/tdsql-competition/consts"
@@ -152,6 +153,12 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 		}
 	}()
 
+	ctx := context.Background()
+	conn, err := t.DB.GetConn(ctx)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
 	for {
 		select {
 		case query := <-queries:
@@ -164,7 +171,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				return err
 			}
 			st := time.Now().UnixNano()
-			_, err = t.DB.Exec(query.Sql)
+			_, err = conn.ExecContext(ctx, query.Sql)
 			log.Infof("table %s_%s exec sql-consuming %dms\n", t, query.Set, (time.Now().UnixNano()-st)/1e6)
 			if err != nil {
 				log.Error(err)
