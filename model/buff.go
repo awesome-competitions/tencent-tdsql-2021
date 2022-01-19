@@ -14,7 +14,6 @@ func (b *Buffer) Reset() {
 }
 
 type Query struct {
-	Sql      []string
-	Pos      int64
-	Finished bool
+	Sql string
+	Pos int64
 }

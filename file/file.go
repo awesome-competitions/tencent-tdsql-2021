@@ -8,6 +8,7 @@ import (
 type File struct {
 	file *os.File
 	path string
+	flag int
 }
 
 func New(path string, flag int) (*File, error) {
@@ -15,6 +16,7 @@ func New(path string, flag int) (*File, error) {
 	return &File{
 		file: file,
 		path: path,
+		flag: flag,
 	}, err
 }
 
@@ -75,4 +77,8 @@ func (f *File) Close() error {
 func (f *File) Delete() error {
 	_ = f.Close()
 	return os.Remove(f.path)
+}
+
+func (f *File) Clone() (*File, error) {
+	return New(f.path, f.flag)
 }
