@@ -119,10 +119,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 			}
 			set := t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
 			buffer := buffers[set]
-			if filter.TestOrAddString(row.Key) {
-				// skip
-				continue
-			}
+			filter.AddString(row.Key)
 			buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
 			buffer.BufferSize++
 			if buffer.BufferSize >= consts.InsertBatch {
