@@ -70,32 +70,35 @@ func New(table *model.Table) (*FileSorter, error) {
 	}, nil
 }
 
+func (fs *FileSorter) Results() map[string]*fileBuffer {
+	return fs.results
+}
+
+func (fs *FileSorter) GetResults(set string) *fileBuffer {
+	fs.Lock()
+	defer fs.Unlock()
+	return fs.results[set]
+}
+
 func Recover(table *model.Table, path string) (*FileSorter, error) {
 	return recoverFileSort(table, path)
 }
 
 func recoverFileSort(table *model.Table, path string) (*FileSorter, error) {
-	shards := map[string][]*fileBuffer{}
-	setInfos := strings.Split(path, ";")
-	for _, setInfo := range setInfos {
-		infos := strings.Split(setInfo, ":")
-		set := infos[0]
-		files := strings.Split(infos[1], ",")
-		s := make([]*fileBuffer, 0)
-		for _, fp := range files {
-			f, err := file.New(fp, os.O_RDWR)
-			if err != nil {
-				return nil, err
-			}
-			s = append(s, newFileBuffer(f, table.Meta))
+	paths := strings.Split(path, ",")
+	results := map[string]*fileBuffer{}
+	for _, path := range paths {
+		infos := strings.Split(path, ":")
+		f, err := file.New(infos[1], os.O_RDWR)
+		if err != nil {
+			return nil, err
 		}
-		shards[set] = s
+		results[infos[0]] = newFileBuffer(f, table.Meta)
 	}
-	fs := &FileSorter{
-		shards: shards,
-		table:  table,
-	}
-	return fs, nil
+	return &FileSorter{
+		results: results,
+		table:   table,
+	}, nil
 }
 
 func (fs *FileSorter) InitLts(set string) *loserTree {
@@ -127,7 +130,7 @@ func (fs *FileSorter) Shards() map[string][]*fileBuffer {
 func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
 	fs.Lock()
 	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("D:\\workspace-tencent\\tmp1\\%d_result_%s", fs.table.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	f, err := file.New(fmt.Sprintf("%d_result_%s", fs.table.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +142,7 @@ func (fs *FileSorter) newResult(set string) (*fileBuffer, error) {
 func (fs *FileSorter) newShard(set string) (*fileBuffer, error) {
 	fs.Lock()
 	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("D:\\workspace-tencent\\tmp1\\%d_shard_%s_%d", fs.table.ID, set, len(fs.shards[set])), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	f, err := file.New(fmt.Sprintf("%d_shard_%s_%d", fs.table.ID, set, len(fs.shards[set])), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
@@ -170,17 +173,6 @@ func (fs *FileSorter) Sharding() error {
 		}()
 	}
 	wg.Wait()
-	path := bytes.Buffer{}
-	for set, shards := range fs.shards {
-		path.WriteString(set + ":")
-		for _, s := range shards {
-			path.WriteString(s.f.Path() + ",")
-		}
-		path.Truncate(path.Len() - 1)
-		path.WriteString(";")
-	}
-	path.Truncate(path.Len() - 1)
-	//return fs.table.Recover.Make(1, path.String())
 	return nil
 }
 
@@ -258,15 +250,13 @@ func (fs *FileSorter) Merging() error {
 		}()
 	}
 	wg.Wait()
-	return nil
-	//fs.results = results
-	//infos := bytes.Buffer{}
-	//for set, result := range results {
-	//	_, _ = result.f.Seek(0, io.SeekStart)
-	//	infos.WriteString(fmt.Sprintf("%s:%s,", set, result.f.Path()))
-	//}
-	//infos.Truncate(infos.Len() - 1)
-	//return fs.table.Recover.Make(1, infos.String())
+	infos := bytes.Buffer{}
+	for set, result := range fs.results {
+		_, _ = result.f.Seek(0, io.SeekStart)
+		infos.WriteString(fmt.Sprintf("%s:%s,", set, result.f.Path()))
+	}
+	infos.Truncate(infos.Len() - 1)
+	return fs.table.Recover.Make(1, infos.String())
 }
 
 func (fs *FileSorter) merging(set string, shards []*fileBuffer) error {
