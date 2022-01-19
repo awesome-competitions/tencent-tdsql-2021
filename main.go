@@ -11,6 +11,7 @@ import (
 	"github.com/ainilili/tdsql-competition/model"
 	"github.com/ainilili/tdsql-competition/parser"
 	"github.com/ainilili/tdsql-competition/util"
+	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 	"strings"
 	"sync"
@@ -75,10 +76,10 @@ func _main() {
 			if fg == -1 {
 				return
 			}
-			keys := map[interface{}]bool{}
+			filter := bloom.NewWithEstimates(10000000, 0.01)
 			for ; fg < len(t.Sources); fg++ {
 				log.Infof("%s sync fg %d\n", t, fg)
-				err := schedule(t, keys, fg, pos)
+				err := schedule(t, filter, fg, pos)
 				if err != nil {
 					log.Panic(err)
 				}
@@ -92,7 +93,7 @@ func _main() {
 	wg.Wait()
 }
 
-func schedule(t *model.Table, keys map[interface{}]bool, flag int, pos int64) error {
+func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) error {
 	fileBuffer := filesort.NewFileBuffer(t.Sources[flag].File, t.Meta)
 	fileBuffer.Reset(pos)
 
@@ -115,13 +116,11 @@ func schedule(t *model.Table, keys map[interface{}]bool, flag int, pos int64) er
 				}
 				log.Panic(err)
 			}
-			buffer := buffers[t.DB.Hash()[util.MurmurHash2([]byte(row.Values[0].Source), 2773)%64]]
-			key := row.Values[0].Value
-			if _, ok := keys[key]; ok {
-				// skip repeat
+			buffer := buffers[t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]]
+			if filter.TestOrAddString(row.Key) {
+				// skip
 				continue
 			}
-			keys[key] = true
 			buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
 			buffer.BufferSize++
 			if buffer.BufferSize >= consts.InsertBatch {
@@ -167,7 +166,7 @@ func schedule(t *model.Table, keys map[interface{}]bool, flag int, pos int64) er
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 					finished = true
 					time.Sleep(100 * time.Millisecond)
-					return schedule(t, keys, flag, query.Pos)
+					return schedule(t, filter, flag, query.Pos)
 				}
 			}
 		}
