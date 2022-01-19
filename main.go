@@ -116,6 +116,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				row, err := fileBuffer.NextRow()
 				if err != nil {
 					if err == io.EOF {
+						finished = true
 						break
 					}
 					log.Panic(err)
