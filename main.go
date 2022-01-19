@@ -89,13 +89,25 @@ func _main() {
 func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) error {
 	rec := t.Recovers[set]
 	cft := t.Conflicts[set]
-	fg, pos, err := rec.Load()
+	fg, pos, total, lastPos, lastTotal, err := rec.Load()
 	if err != nil {
 		log.Panic(err)
 	}
 	if flag < fg {
 		return nil
 	}
+	// recover
+	c, err := count(t, set)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if int64(c) == lastTotal {
+		pos = lastPos
+		total = lastTotal
+	}
+	lastPos = pos
+	lastTotal = total
 	f, err := t.Sources[flag].File.Clone()
 	if err != nil {
 		log.Error(err)
@@ -103,14 +115,13 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 	}
 	fileBuffer := filesort.NewFileBuffer(f, t.Meta)
 	fileBuffer.Reset(pos)
+	cftBuffer := bytes.Buffer{}
 	buffer := &model.Buffer{
 		Buffer: &bytes.Buffer{},
 	}
 	buffer.Buffer.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	buffer.HeaderSize = buffer.Buffer.Len()
 	queries := make(chan model.Query, consts.PreparedBatch)
-
-	cftBuffer := bytes.Buffer{}
 
 	finished := false
 	go func() {
@@ -142,12 +153,19 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 					}
 					cftBuffer.Reset()
 				}
+				total += int64(buffer.BufferSize)
+				pos = fileBuffer.Position()
 				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
 				buffer.Buffer.WriteString(";")
 				queries <- model.Query{
-					Sql: buffer.Buffer.String(),
-					Pos: fileBuffer.Position(),
+					Sql:       buffer.Buffer.String(),
+					Pos:       pos,
+					Total:     total,
+					LastPos:   lastPos,
+					LastTotal: lastTotal,
 				}
+				lastPos = pos
+				lastTotal = total
 				buffer.Reset()
 			}
 		}
@@ -155,7 +173,6 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 			Sql: "finished",
 		}
 	}()
-
 	ctx := context.Background()
 	conn, err := t.DB.GetConn(ctx)
 	if err != nil {
@@ -166,9 +183,14 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 		select {
 		case query := <-queries:
 			if query.Sql == "finished" {
+				err := rec.Make(flag+1, 0, 0, 0, 0)
+				if err != nil {
+					log.Error(err)
+					return err
+				}
 				return nil
 			}
-			err := rec.Make(flag, query.Pos)
+			err := rec.Make(flag, query.Pos, query.Total, query.LastPos, query.LastTotal)
 			if err != nil {
 				log.Error(err)
 				return err
