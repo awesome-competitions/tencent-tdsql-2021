@@ -246,16 +246,6 @@ func schedule(fs *filesort.FileSorter, set string) error {
 
 	ctx := context.Background()
 	conn, _ := t.DB.GetConn(ctx)
-	_, err = conn.ExecContext(ctx, "set @@sql_mode=NO_ENGINE_SUBSTITUTION;")
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	_, err = conn.ExecContext(ctx, fmt.Sprintf("/*sets:%s*/ set @@sql_mode=NO_ENGINE_SUBSTITUTION;", set))
-	if err != nil {
-		log.Error(err)
-		return err
-	}
 	for !completed {
 		select {
 		case s := <-prepared:
@@ -276,7 +266,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				_, err = conn.ExecContext(ctx, s.Sql)
 				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
-					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+					fmt.Printf("table %s_%s sql err: %v\n", t, set, err)
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 						sqlErr = true
 					} else {
