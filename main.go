@@ -73,7 +73,7 @@ func _main() {
 			}
 			for i := range db.Sets() {
 				set := db.Sets()[i]
-				log.Infof("table %s_%s start schedule %d\n", t, set)
+				log.Infof("table %s_%s start schedule\n", t, set)
 				go func() {
 					defer func() {
 						wg.Add(-1)
