@@ -6,6 +6,8 @@ import (
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
+	"github.com/ainilili/tdsql-competition/util"
+	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 )
 
@@ -68,6 +70,25 @@ func (fb *fileBuffer) Reset(offset int64) {
 	fb.buf.reset()
 	fb.pos = offset
 	fb.lastPos = offset
+}
+
+func (fb *fileBuffer) Recover(filter *bloom.BloomFilter, t *model.Table, set string, pos int64) error {
+	for {
+		row, err := fb.NextRow()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if fb.pos == pos {
+			break
+		}
+		if t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64] == set {
+			filter.AddString(row.Key)
+		}
+	}
+	return nil
 }
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {

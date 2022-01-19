@@ -34,8 +34,8 @@ func (r *Recover) Make(flag int, pos int64, total int64, lastPos int64, lastTota
 	buf := bytes.Buffer{}
 	buf.Write(flagBytes)
 	buf.Write(posBytes)
-	buf.Write(lastPosBytes)
 	buf.Write(totalBytes)
+	buf.Write(lastPosBytes)
 	buf.Write(lastTotalBytes)
 	err := r.file.Truncate(0)
 	if err != nil {

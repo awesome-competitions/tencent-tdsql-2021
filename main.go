@@ -73,7 +73,6 @@ func _main() {
 					}()
 					filter := bloom.NewWithEstimates(5000000, 0.01)
 					for fg := 0; fg < len(t.Sources); fg++ {
-						log.Infof("%s sync fg %d\n", t, fg)
 						err := schedule(t, filter, fg, set)
 						if err != nil {
 							log.Panic(err)
@@ -89,12 +88,19 @@ func _main() {
 func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) error {
 	rec := t.Recovers[set]
 	cft := t.Conflicts[set]
+	f, err := t.Sources[flag].File.Clone()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	fileBuffer := filesort.NewFileBuffer(f, t.Meta)
+
 	fg, pos, total, lastPos, lastTotal, err := rec.Load()
 	if err != nil {
 		log.Panic(err)
 	}
 	if flag < fg {
-		return nil
+		return fileBuffer.Recover(filter, t, set, -1)
 	}
 	// recover
 	c, err := count(t, set)
@@ -108,12 +114,13 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 	}
 	lastPos = pos
 	lastTotal = total
-	f, err := t.Sources[flag].File.Clone()
-	if err != nil {
-		log.Error(err)
-		return err
+	if pos > 0 {
+		err = fileBuffer.Recover(filter, t, set, pos)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
 	}
-	fileBuffer := filesort.NewFileBuffer(f, t.Meta)
 	fileBuffer.Reset(pos)
 	cftBuffer := bytes.Buffer{}
 	buffer := &model.Buffer{
@@ -153,8 +160,8 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 					}
 					cftBuffer.Reset()
 				}
-				total += int64(buffer.BufferSize)
 				pos = fileBuffer.Position()
+				total += int64(buffer.BufferSize)
 				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
 				buffer.Buffer.WriteString(";")
 				queries <- model.Query{
@@ -170,7 +177,11 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 			}
 		}
 		queries <- model.Query{
-			Sql: "finished",
+			Sql:       "finished",
+			Pos:       pos,
+			Total:     total,
+			LastPos:   lastPos,
+			LastTotal: lastTotal,
 		}
 	}()
 	ctx := context.Background()
@@ -183,7 +194,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 		select {
 		case query := <-queries:
 			if query.Sql == "finished" {
-				err := rec.Make(flag+1, 0, 0, 0, 0)
+				err := rec.Make(flag+1, 0, query.Total, 0, query.Total)
 				if err != nil {
 					log.Error(err)
 					return err
@@ -199,7 +210,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 			_, err = conn.ExecContext(ctx, query.Sql)
 			log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 			if err != nil {
-				log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+				log.Errorf("table %s_%s sql err: %v \n", t, set, err)
 				return err
 			}
 		}
