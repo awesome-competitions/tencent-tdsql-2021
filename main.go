@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -105,7 +106,11 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 	fileBuffer := filesort.NewFileBuffer(f, t.Meta)
 	fileBuffer.Reset(pos)
 
-	buffer := &model.Buffer{}
+	buffer := &model.Buffer{
+		Buffer: &bytes.Buffer{},
+	}
+	buffer.Buffer.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
+	buffer.HeaderSize = buffer.Buffer.Len()
 	queries := make(chan model.Query, consts.PreparedBatch)
 	finished := false
 	go func() {
