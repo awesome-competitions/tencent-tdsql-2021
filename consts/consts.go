@@ -10,7 +10,7 @@ const (
 	FileSortShardSize = 1 * M
 	InsertBatch       = 46 * K
 	FileSortLimit     = 2
-	SyncLimit         = 28
+	SyncLimit         = 1
 	PreparedBatch     = 3
 	CommitBatch       = 3
 )
