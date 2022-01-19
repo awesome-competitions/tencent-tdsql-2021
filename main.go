@@ -111,45 +111,41 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 	finished := false
 	go func() {
 		for !finished {
-			row, err := fileBuffer.NextRow()
-			if err != nil {
-				if err == io.EOF {
-					break
+			inserted := 0
+			for i := 0; i < consts.InsertBatch; i++ {
+				row, err := fileBuffer.NextRow()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					log.Panic(err)
 				}
-				log.Panic(err)
+				if filter.TestOrAddString(row.Key) {
+					continue
+				}
+				set := t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
+				buffer := buffers[set]
+				buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
+				buffer.BufferSize++
+				inserted++
 			}
-			set := t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
-			buffer := buffers[set]
-			if filter.TestOrAddString(row.Key) {
-				continue
-			}
-			buffer.Buffer.WriteString(fmt.Sprintf("(%s),", row.String()))
-			buffer.BufferSize++
-			if buffer.BufferSize >= consts.InsertBatch {
-				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
-				buffer.Buffer.WriteString(";")
+			if inserted > 0 {
+				inserted = 0
+				sql := make([]string, 0)
+				for _, buffer := range buffers {
+					if buffer.BufferSize > 0 {
+						sql = append(sql, buffer.Buffer.String())
+					}
+					buffer.Buffer.Reset()
+				}
 				queries <- model.Query{
-					Set: set,
-					Sql: buffer.Buffer.String(),
+					Sql: sql,
 					Pos: fileBuffer.Position(),
 				}
-				buffer.Reset()
-			}
-		}
-		for set, buffer := range buffers {
-			if buffer.BufferSize > 0 {
-				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
-				buffer.Buffer.WriteString(";")
-				queries <- model.Query{
-					Set: set,
-					Sql: buffer.Buffer.String(),
-					Pos: fileBuffer.Position(),
-				}
-				buffer.Reset()
 			}
 		}
 		queries <- model.Query{
-			Sql: "break",
+			Finished: true,
 		}
 	}()
 
@@ -159,28 +155,28 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 		log.Error(err)
 		return err
 	}
+	wg := sync.WaitGroup{}
+
 	for {
 		select {
 		case query := <-queries:
-			if query.Sql == "break" {
+			if query.Finished {
 				return nil
 			}
-			err := t.Recover.Make(flag, query.Pos)
-			if err != nil {
-				log.Error(err)
-				return err
+			wg.Add(len(query.Sql))
+			for i := range query.Sql {
+				s := query.Sql[i]
+				go func() {
+					defer wg.Add(-1)
+					st := time.Now().UnixNano()
+					_, err = conn.ExecContext(ctx, s)
+					log.Infof("table %s exec sql-consuming %dms\n", t, (time.Now().UnixNano()-st)/1e6)
+					if err != nil {
+						log.Panic(err)
+					}
+				}()
 			}
-			st := time.Now().UnixNano()
-			_, err = conn.ExecContext(ctx, query.Sql)
-			log.Infof("table %s_%s exec sql-consuming %dms\n", t, query.Set, (time.Now().UnixNano()-st)/1e6)
-			if err != nil {
-				log.Error(err)
-				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
-					finished = true
-					time.Sleep(100 * time.Millisecond)
-					return schedule(t, filter, flag, query.Pos)
-				}
-			}
+			wg.Wait()
 		}
 	}
 }
