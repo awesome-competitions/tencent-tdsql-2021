@@ -7,6 +7,7 @@ import (
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
 	"io"
+	"strconv"
 )
 
 type buffer struct {
@@ -98,8 +99,12 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 		fb.pos++
 		if b == consts.LF || b == consts.COMMA {
 			s := string(buf.buf[start:buf.pos])
+			if index == 0 {
+				row.SortID, _ = strconv.Atoi(s)
+			}
 			if fb.tags[index] {
 				fb.tmk.WriteString(s)
+				fb.tmk.WriteByte(',')
 			}
 			t := fb.meta.ColsType[fb.meta.Cols[index]]
 			if t.IsString() && s[0] != '\'' {

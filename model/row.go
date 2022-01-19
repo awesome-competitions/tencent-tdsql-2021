@@ -49,10 +49,14 @@ var TypeParser = map[Type]func(str string) (interface{}, error){
 type Row struct {
 	Key    string
 	Source string
+	SortID int
 }
 
 func (r Row) Compare(or interface{}) bool {
-	return r.Key > or.(Row).Key
+	if r.SortID == or.(Row).SortID {
+		return r.Key > or.(Row).Key
+	}
+	return r.SortID > or.(Row).SortID
 }
 
 func (r Row) String() string {
