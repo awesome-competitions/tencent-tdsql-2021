@@ -56,7 +56,6 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	tables = tables[:1]
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(tables))
