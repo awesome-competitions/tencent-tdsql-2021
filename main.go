@@ -56,7 +56,6 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
-
 	wg := sync.WaitGroup{}
 	wg.Add(len(tables) * len(db.Sets()))
 	for i := range tables {
@@ -80,10 +79,6 @@ func _main() {
 							log.Panic(err)
 						}
 					}
-					err = t.Recover.Make(-1, 0)
-					if err != nil {
-						log.Panic(err)
-					}
 				}()
 			}
 		}()
@@ -92,7 +87,8 @@ func _main() {
 }
 
 func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) error {
-	rec := t.SetRecovers[set]
+	rec := t.Recovers[set]
+	cft := t.Conflicts[set]
 	fg, pos, err := rec.Load()
 	if err != nil {
 		log.Panic(err)
@@ -107,13 +103,15 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 	}
 	fileBuffer := filesort.NewFileBuffer(f, t.Meta)
 	fileBuffer.Reset(pos)
-
 	buffer := &model.Buffer{
 		Buffer: &bytes.Buffer{},
 	}
 	buffer.Buffer.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
 	buffer.HeaderSize = buffer.Buffer.Len()
 	queries := make(chan model.Query, consts.PreparedBatch)
+
+	cftBuffer := bytes.Buffer{}
+
 	finished := false
 	go func() {
 		for !finished {
@@ -127,6 +125,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 					log.Panic(err)
 				}
 				if filter.TestOrAddString(row.Key) {
+					cftBuffer.WriteString(row.Source + "\n")
 					continue
 				}
 				if t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64] == set {
@@ -136,6 +135,13 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 				}
 			}
 			if buffer.BufferSize > 0 {
+				if cftBuffer.Len() > 0 {
+					_, err := cft.Write(cftBuffer.Bytes())
+					if err != nil {
+						log.Panic(err)
+					}
+					cftBuffer.Reset()
+				}
 				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
 				buffer.Buffer.WriteString(";")
 				queries <- model.Query{
@@ -162,11 +168,17 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 			if query.Sql == "finished" {
 				return nil
 			}
+			err := rec.Make(flag, query.Pos)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
 			st := time.Now().UnixNano()
 			_, err = conn.ExecContext(ctx, query.Sql)
 			log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 			if err != nil {
-				log.Panic(err)
+				log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+				return err
 			}
 		}
 	}

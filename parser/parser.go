@@ -156,26 +156,29 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 						DB:       db,
 						Meta:     ParseTableMeta(string(schema)),
 					}
-					r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
-					if err != nil {
-						return nil, err
-					}
-					t.Recover = r
+
 					for i, c := range t.Meta.Cols {
 						t.Cols += c
 						if i != len(t.Meta.Cols)-1 {
 							t.Cols += ","
 						}
 					}
-					setRecovers := map[string]*rver.Recover{}
+					recovers := map[string]*rver.Recover{}
+					conflicts := map[string]*file.File{}
 					for _, set := range db.Sets() {
-						r, err := rver.New(fmt.Sprintf("recover_offset_%d_%s", t.ID, set))
+						r, err := rver.New(fmt.Sprintf("recover_%d_%s", t.ID, set))
 						if err != nil {
 							return nil, err
 						}
-						setRecovers[set] = r
+						recovers[set] = r
+						f, err := file.New(fmt.Sprintf("conflict_%d_%s", t.ID, set), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+						if err != nil {
+							return nil, err
+						}
+						conflicts[set] = f
 					}
-					t.SetRecovers = setRecovers
+					t.Recovers = recovers
+					t.Conflicts = conflicts
 					tableId++
 					tables = append(tables, t)
 					tablesMap[dbName] = append(tablesMap[dbName], t)
