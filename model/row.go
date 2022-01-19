@@ -2,6 +2,7 @@ package model
 
 import (
 	"strconv"
+	"strings"
 )
 
 type Type int
@@ -46,10 +47,8 @@ var TypeParser = map[Type]func(str string) (interface{}, error){
 }
 
 type Row struct {
-	Source   string
-	Key      string
-	ID       string
-	UpdateAt string
+	Key    string
+	Source string
 }
 
 func (r Row) Compare(or interface{}) bool {
@@ -58,6 +57,14 @@ func (r Row) Compare(or interface{}) bool {
 
 func (r Row) String() string {
 	return r.Source
+}
+
+func (r Row) ID() string {
+	return r.Source[0:strings.Index(r.Source, ",")]
+}
+
+func (r Row) UpdateAt() string {
+	return r.Source[strings.LastIndex(r.Source, ",")+1:]
 }
 
 type Rows []*Row

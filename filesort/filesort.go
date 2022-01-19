@@ -44,7 +44,7 @@ func (sv *shardLoserValue) Compare(o interface{}) bool {
 	if cur.Key != next.Key {
 		return cur.Compare(*next)
 	}
-	if next.UpdateAt > cur.UpdateAt {
+	if next.UpdateAt() > cur.UpdateAt() {
 		sv.row = next
 	}
 	err := ov.next()
@@ -125,7 +125,7 @@ func (fs *FileSorter) Shards() map[string][]*fileBuffer {
 func (fs *FileSorter) newShard(set string) (*fileBuffer, error) {
 	fs.Lock()
 	defer fs.Unlock()
-	f, err := file.New(fmt.Sprintf("%d_shard_%s_%d", fs.table.ID, set, len(fs.shards[set])), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	f, err := file.New(fmt.Sprintf("D:\\workspace-tencent\\tmp1\\%d_shard_%s_%d", fs.table.ID, set, len(fs.shards[set])), os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,8 @@ func (fs *FileSorter) Sharding() error {
 		path.WriteString(";")
 	}
 	path.Truncate(path.Len() - 1)
-	return fs.table.Recover.Make(1, path.String())
+	//return fs.table.Recover.Make(1, path.String())
+	return nil
 }
 
 func (fs *FileSorter) shardingSource(source *fileBuffer) error {
@@ -176,7 +177,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	for {
 		row, nextErr := source.NextRow()
 		if row != nil {
-			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
+			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
 			rows[set] = append(rows[set], row)
 		}
 		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
@@ -197,7 +198,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 							break
 						}
 						i = j
-						if next.UpdateAt > cur.UpdateAt {
+						if next.UpdateAt() > cur.UpdateAt() {
 							cur = next
 						}
 					}

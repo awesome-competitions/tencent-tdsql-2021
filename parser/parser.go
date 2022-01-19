@@ -2,12 +2,10 @@ package parser
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ainilili/tdsql-competition/database"
 	"github.com/ainilili/tdsql-competition/file"
 	"github.com/ainilili/tdsql-competition/log"
 	"github.com/ainilili/tdsql-competition/model"
-	"github.com/ainilili/tdsql-competition/rver"
 	"github.com/ainilili/tdsql-competition/util"
 	"io/ioutil"
 	"os"
@@ -156,26 +154,26 @@ func ParseTables(db *database.DB, dataPath string) ([]*model.Table, error) {
 						DB:       db,
 						Meta:     ParseTableMeta(string(schema)),
 					}
-					r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
-					if err != nil {
-						return nil, err
-					}
-					t.Recover = r
-					for i, c := range t.Meta.Cols {
-						t.Cols += c
-						if i != len(t.Meta.Cols)-1 {
-							t.Cols += ","
-						}
-					}
-					setRecovers := map[string]*rver.Recover{}
-					for _, set := range db.Sets() {
-						r, err := rver.New(fmt.Sprintf("recover_offset_%d_%s", t.ID, set))
-						if err != nil {
-							return nil, err
-						}
-						setRecovers[set] = r
-					}
-					t.SetRecovers = setRecovers
+					//r, err := rver.New(fmt.Sprintf("recover%d", t.ID))
+					//if err != nil {
+					//	return nil, err
+					//}
+					//t.Recover = r
+					//for i, c := range t.Meta.Cols {
+					//	t.Cols += c
+					//	if i != len(t.Meta.Cols)-1 {
+					//		t.Cols += ","
+					//	}
+					//}
+					//setRecovers := map[string]*rver.Recover{}
+					//for _, set := range db.Sets() {
+					//	r, err := rver.New(fmt.Sprintf("recover_offset_%d_%s", t.ID, set))
+					//	if err != nil {
+					//		return nil, err
+					//	}
+					//	setRecovers[set] = r
+					//}
+					//t.SetRecovers = setRecovers
 					tableId++
 					tables = append(tables, t)
 					tablesMap[dbName] = append(tablesMap[dbName], t)

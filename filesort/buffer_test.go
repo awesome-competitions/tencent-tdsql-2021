@@ -21,10 +21,12 @@ func TestFileBuffer(t *testing.T) {
 	fb := newFileBuffer(f, meta)
 
 	start := time.Now().UnixNano()
+	total := 0
 	var row *model.Row
-	for i := 0; i < 3500000; i++ {
+	for i := 0; i < 500000; i++ {
 		r, err := fb.NextRow()
 		if r != nil {
+			total++
 			row = r
 		}
 		if err != nil {
@@ -32,7 +34,12 @@ func TestFileBuffer(t *testing.T) {
 			break
 		}
 	}
-	fmt.Println(row.String())
-	fmt.Println(fb.readTimes)
+	if row != nil {
+		fmt.Println(row)
+		fmt.Println(row.ID())
+		fmt.Println(row.UpdateAt())
+		fmt.Println(row.Key)
+	}
+	fmt.Println(total)
 	fmt.Println((time.Now().UnixNano()-start)/1e6, "ms")
 }

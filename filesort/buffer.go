@@ -13,11 +13,13 @@ type buffer struct {
 	buf []byte
 	pos int
 	cap int
+	eof bool
 }
 
 func (bf *buffer) reset() {
 	bf.pos = 0
 	bf.cap = 0
+	bf.eof = false
 }
 
 type fileBuffer struct {
@@ -72,66 +74,57 @@ func (fb *fileBuffer) Reset(offset int64) {
 
 func (fb *fileBuffer) NextRow() (*model.Row, error) {
 	row := model.Row{}
-	index := 0
-	completed := false
-	lastPos := fb.pos
-	fb.tmp.Reset()
-	fb.tmk.Reset()
-	fb.tms.Reset()
-	for {
-		for ; fb.buf.pos < fb.buf.cap; fb.buf.pos++ {
-			b := fb.buf.buf[fb.buf.pos]
-			fb.pos++
-			if b == consts.COMMA || b == consts.LF {
-				s := fb.tmp.String()
-				if index == 0 {
-					row.ID = s
-				}
-				if index == fb.upd {
-					row.UpdateAt = s
-				}
-				if fb.tags[index] {
-					fb.tmk.WriteString(s)
-				}
-				t := fb.meta.ColsType[fb.meta.Cols[index]]
-				if t.IsString() && s[0] != '\'' {
-					fb.tms.WriteByte('\'')
-					fb.tms.WriteString(s)
-					fb.tms.WriteByte('\'')
-				} else {
-					fb.tms.WriteString(s)
-				}
-				if b == consts.COMMA {
-					fb.tms.WriteByte(consts.COMMA)
-				}
-				index++
-				fb.tmp.Reset()
-				if b == consts.LF {
-					row.Source = fb.tms.String()
-					row.Key = fb.tmk.String()
-					completed = true
-					fb.buf.pos++
-					break
-				}
-			} else {
-				fb.tmp.WriteByte(b)
-			}
-		}
-		if completed {
-			break
-		}
-		capacity, err := fb.f.Read(fb.buf.buf)
+	buf := fb.buf
+	dif := buf.cap - buf.pos
+	if dif < 100 && !buf.eof {
+		copy(buf.buf[:dif], buf.buf[buf.pos:buf.cap])
+		capacity, err := fb.f.Read(buf.buf[dif:])
 		if err != nil {
 			if err == io.EOF {
-				fb.lastPos = fb.pos
+				buf.eof = true
 			}
-			return nil, err
+		} else {
+			fb.readTimes++
+			fb.buf.pos = 0
+			fb.buf.cap = dif + capacity
 		}
-		fb.readTimes++
-		fb.buf.pos = 0
-		fb.buf.cap = capacity
 	}
-	fb.lastPos = lastPos
+	start := buf.pos
+	index := 0
+	fb.tmk.Reset()
+	fb.tms.Reset()
+	for ; buf.pos < buf.cap; buf.pos++ {
+		b := buf.buf[buf.pos]
+		fb.pos++
+		if b == consts.LF || b == consts.COMMA {
+			s := string(buf.buf[start:buf.pos])
+			if fb.tags[index] {
+				fb.tmk.WriteString(s)
+			}
+			t := fb.meta.ColsType[fb.meta.Cols[index]]
+			if t.IsString() && s[0] != '\'' {
+				fb.tms.WriteByte('\'')
+				fb.tms.WriteString(s)
+				fb.tms.WriteByte('\'')
+			} else {
+				fb.tms.WriteString(s)
+			}
+			if b == consts.COMMA {
+				fb.tms.WriteByte(consts.COMMA)
+			}
+			index++
+			start = buf.pos + 1
+			if b == consts.LF {
+				row.Source = fb.tms.String()
+				row.Key = fb.tmk.String()
+				fb.buf.pos++
+				break
+			}
+		}
+	}
+	if row.Source == "" {
+		return nil, io.EOF
+	}
 	return &row, nil
 }
 
