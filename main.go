@@ -56,10 +56,16 @@ func _main() {
 	if err != nil {
 		log.Panic(err)
 	}
+	syncLimit := make(chan bool, consts.SyncLimit)
+	for i := 0; i < consts.SyncLimit; i++ {
+		syncLimit <- true
+	}
 	wg := sync.WaitGroup{}
 	wg.Add(len(tables) * len(db.Sets()))
 	for i := range tables {
 		t := tables[i]
+		_ = <-syncLimit
+		_ = <-syncLimit
 		go func() {
 			err = initTable(t)
 			if err != nil {
@@ -67,9 +73,11 @@ func _main() {
 			}
 			for i := range db.Sets() {
 				set := db.Sets()[i]
+				log.Infof("table %s_%s start schedule %d\n", t, set)
 				go func() {
 					defer func() {
 						wg.Add(-1)
+						syncLimit <- true
 					}()
 					filter := bloom.NewWithEstimates(5000000, 0.01)
 					for fg := 0; fg < len(t.Sources); fg++ {
