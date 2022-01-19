@@ -116,7 +116,8 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				}
 				log.Panic(err)
 			}
-			buffer := buffers[t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]]
+			set := t.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
+			buffer := buffers[set]
 			if filter.TestOrAddString(row.Key) {
 				// skip
 				continue
@@ -127,17 +128,19 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
 				buffer.Buffer.WriteString(";")
 				queries <- model.Query{
+					Set: set,
 					Sql: buffer.Buffer.String(),
 					Pos: fileBuffer.Position(),
 				}
 				buffer.Reset()
 			}
 		}
-		for _, buffer := range buffers {
+		for set, buffer := range buffers {
 			if buffer.BufferSize > 0 {
 				buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
 				buffer.Buffer.WriteString(";")
 				queries <- model.Query{
+					Set: set,
 					Sql: buffer.Buffer.String(),
 					Pos: fileBuffer.Position(),
 				}
@@ -160,7 +163,9 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				log.Error(err)
 				return err
 			}
+			st := time.Now().UnixNano()
 			_, err = t.DB.Exec(query.Sql)
+			log.Infof("table %s_%s exec sql-consuming %dms\n", t, query.Set, (time.Now().UnixNano()-st)/1e6)
 			if err != nil {
 				log.Error(err)
 				if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {

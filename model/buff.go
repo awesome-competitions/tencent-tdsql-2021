@@ -14,6 +14,7 @@ func (b *Buffer) Reset() {
 }
 
 type Query struct {
+	Set string
 	Sql string
 	Pos int64
 }
