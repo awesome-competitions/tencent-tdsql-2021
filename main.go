@@ -61,30 +61,32 @@ func _main() {
 	wg.Add(len(tables) * len(db.Sets()))
 	for i := range tables {
 		t := tables[i]
-		err = initTable(t)
-		if err != nil {
-			log.Panic(err)
-		}
-		for i := range db.Sets() {
-			set := db.Sets()[i]
-			go func() {
-				defer func() {
-					wg.Add(-1)
-				}()
-				filter := bloom.NewWithEstimates(5000000, 0.01)
-				for fg := 0; fg < len(t.Sources); fg++ {
-					log.Infof("%s sync fg %d\n", t, fg)
-					err := schedule(t, filter, fg, set)
+		go func() {
+			err = initTable(t)
+			if err != nil {
+				log.Panic(err)
+			}
+			for i := range db.Sets() {
+				set := db.Sets()[i]
+				go func() {
+					defer func() {
+						wg.Add(-1)
+					}()
+					filter := bloom.NewWithEstimates(5000000, 0.01)
+					for fg := 0; fg < len(t.Sources); fg++ {
+						log.Infof("%s sync fg %d\n", t, fg)
+						err := schedule(t, filter, fg, set)
+						if err != nil {
+							log.Panic(err)
+						}
+					}
+					err = t.Recover.Make(-1, 0)
 					if err != nil {
 						log.Panic(err)
 					}
-				}
-				err = t.Recover.Make(-1, 0)
-				if err != nil {
-					log.Panic(err)
-				}
-			}()
-		}
+				}()
+			}
+		}()
 	}
 	wg.Wait()
 }
@@ -162,7 +164,7 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, set string) e
 			}
 			st := time.Now().UnixNano()
 			_, err = conn.ExecContext(ctx, query.Sql)
-			log.Infof("table %s exec sql-consuming %dms\n", t, (time.Now().UnixNano()-st)/1e6)
+			log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 			if err != nil {
 				log.Panic(err)
 			}
