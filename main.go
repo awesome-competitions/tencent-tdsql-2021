@@ -134,6 +134,8 @@ func schedule(t *model.Table, filter *bloom.BloomFilter, flag int, pos int64) er
 				sql := make([]string, 0)
 				for _, buffer := range buffers {
 					if buffer.BufferSize > 0 {
+						buffer.Buffer.Truncate(buffer.Buffer.Len() - 1)
+						buffer.Buffer.WriteString(";")
 						sql = append(sql, buffer.Buffer.String())
 					}
 					buffer.Buffer.Reset()
