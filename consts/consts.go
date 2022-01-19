@@ -1,6 +1,7 @@
 package consts
 
 const (
+	Dir                 = ""
 	LF                  = byte('\n')
 	COMMA               = byte(',')
 	K                   = 1024

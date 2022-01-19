@@ -1,8 +1,10 @@
 package file
 
 import (
+	"github.com/ainilili/tdsql-competition/consts"
 	"io/ioutil"
 	"os"
+	"strings"
 )
 
 type File struct {
@@ -11,6 +13,9 @@ type File struct {
 }
 
 func New(path string, flag int) (*File, error) {
+	if !strings.HasPrefix(path, "D") {
+		path = consts.Dir + path
+	}
 	file, err := os.OpenFile(path, flag, os.FileMode(0766))
 	return &File{
 		file: file,
