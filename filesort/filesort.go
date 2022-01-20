@@ -173,14 +173,32 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	var lastPos int64
 	buf := bytes.Buffer{}
 	rows := map[string]model.Rows{}
-	for {
-		row, nextErr := source.NextRow()
-		if row != nil {
-			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
-			rows[set] = append(rows[set], row)
+	rowsChan := make(chan map[string]model.Rows, 2)
+	go func() {
+		for {
+			row, nextErr := source.NextRow()
+			if row != nil {
+				set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
+				rows[set] = append(rows[set], row)
+			}
+			if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
+				lastPos = source.pos
+				rowsChan <- rows
+				if nextErr != nil {
+					rowsChan <- nil
+					break
+				}
+				rows = map[string]model.Rows{}
+			}
 		}
-		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
-			lastPos = source.pos
+	}()
+
+	for {
+		select {
+		case rows := <-rowsChan:
+			if rows == nil {
+				return nil
+			}
 			for set, rs := range rows {
 				sort.Sort(&rs)
 				shard, err := fs.newShard(set)
@@ -210,13 +228,8 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 				shard.Reset(0)
 				buf.Reset()
 			}
-			rows = map[string]model.Rows{}
-			if nextErr != nil {
-				break
-			}
 		}
 	}
-	return nil
 }
 
 func (fs *FileSorter) Next(lt *loserTree, set string) (*model.Row, error) {
