@@ -44,7 +44,7 @@ func (sv *shardLoserValue) Compare(o interface{}) bool {
 	if cur.Key != next.Key {
 		return cur.Compare(*next)
 	}
-	if next.UpdateAt > cur.UpdateAt {
+	if next.UpdateAt() > cur.UpdateAt() {
 		sv.row = next
 	}
 	err := ov.next()
@@ -176,7 +176,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	for {
 		row, nextErr := source.NextRow()
 		if row != nil {
-			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID), 2773)%64]
+			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
 			rows[set] = append(rows[set], row)
 		}
 		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
@@ -197,7 +197,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 							break
 						}
 						i = j
-						if next.UpdateAt > cur.UpdateAt {
+						if next.UpdateAt() > cur.UpdateAt() {
 							cur = next
 						}
 					}
