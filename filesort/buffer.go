@@ -94,6 +94,7 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 	index := 0
 	fb.tmk.Reset()
 	fb.tms.Reset()
+	lastPos := fb.pos
 	for ; buf.pos < buf.cap; buf.pos++ {
 		b := buf.buf[buf.pos]
 		fb.pos++
@@ -128,8 +129,10 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 		}
 	}
 	if row.Source == "" {
+		fb.lastPos = fb.pos
 		return nil, io.EOF
 	}
+	fb.lastPos = lastPos
 	return &row, nil
 }
 
