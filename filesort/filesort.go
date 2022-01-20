@@ -180,14 +180,32 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	var lastPos int64
 	buf := bytes.Buffer{}
 	rows := map[string]model.Rows{}
-	for {
-		row, nextErr := source.NextRow()
-		if row != nil {
-			set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
-			rows[set] = append(rows[set], row)
+	rowsChan := make(chan map[string]model.Rows, 2)
+	go func() {
+		for {
+			row, nextErr := source.NextRow()
+			if row != nil {
+				set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
+				rows[set] = append(rows[set], row)
+			}
+			if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
+				lastPos = source.pos
+				rowsChan <- rows
+				if nextErr != nil {
+					rowsChan <- nil
+					break
+				}
+				rows = map[string]model.Rows{}
+			}
 		}
-		if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
-			lastPos = source.pos
+	}()
+
+	for {
+		select {
+		case rows := <-rowsChan:
+			if rows == nil {
+				return nil
+			}
 			for set, rs := range rows {
 				sort.Sort(&rs)
 				shard, err := fs.newShard(set)
@@ -217,13 +235,8 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 				shard.Reset(0)
 				buf.Reset()
 			}
-			rows = map[string]model.Rows{}
-			if nextErr != nil {
-				break
-			}
 		}
 	}
-	return nil
 }
 
 func (fs *FileSorter) Merging() error {
@@ -305,6 +318,67 @@ func (fs *FileSorter) merging(set string, shards []*fileBuffer) error {
 	result.Reset(0)
 	return nil
 }
+
+//func (fs *FileSorter) merging(set string, shards []*fileBuffer) error {
+//	losers := make([]*loser, 0)
+//	for _, shard := range shards {
+//		l := &loser{}
+//		sv := &shardLoserValue{
+//			shard: shard,
+//			l:     l,
+//		}
+//		l.value = sv
+//		err := sv.next()
+//		if err != nil {
+//			continue
+//		}
+//		losers = append(losers, l)
+//	}
+//	lt := newLoserTree(losers)
+//	result, err := fs.newResult(set)
+//	if err != nil {
+//		return err
+//	}
+//
+//	bufs := make(chan string, 2)
+//	go func() {
+//		buffer := &bytes.Buffer{}
+//		for !lt.root().invalid {
+//			l := lt.root()
+//			v := l.value.(*shardLoserValue)
+//			row := v.row
+//			buffer.WriteString(row.Source + "\n")
+//			if buffer.Len() > consts.FileMergeBufferSize {
+//				bufs <- buffer.String()
+//				buffer.Reset()
+//			}
+//			err := v.next()
+//			if err != nil {
+//				l.exit()
+//				continue
+//			}
+//			l.contest()
+//		}
+//		if buffer.Len() > 0 {
+//			bufs <- buffer.String()
+//		}
+//		bufs <- ""
+//	}()
+//
+//	for {
+//		select {
+//		case buf := <-bufs:
+//			if buf == "" {
+//				result.Reset(0)
+//				return nil
+//			}
+//			_, err := result.f.Write([]byte(buf))
+//			if err != nil {
+//				return err
+//			}
+//		}
+//	}
+//}
 
 func (fs *FileSorter) Next(lt *loserTree, set string) (*model.Row, error) {
 	if !fs.HasNext(lt, set) {
