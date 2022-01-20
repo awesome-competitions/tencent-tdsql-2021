@@ -171,11 +171,9 @@ func (fs *FileSorter) Sharding() error {
 
 func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 	var lastPos int64
+	buf := bytes.Buffer{}
 	rows := map[string]model.Rows{}
-	total := int(source.f.Size()/consts.FileSortShardSize) + 1
-	wg := sync.WaitGroup{}
-	wg.Add(total)
-	rowsChan := make(chan map[string]model.Rows, total)
+	rowsChan := make(chan map[string]model.Rows, 2)
 	go func() {
 		for {
 			row, nextErr := source.NextRow()
@@ -194,47 +192,41 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 			}
 		}
 	}()
-
 	for {
 		select {
 		case rows := <-rowsChan:
 			if rows == nil {
-				wg.Wait()
 				return nil
 			}
-			go func() {
-				buf := bytes.Buffer{}
-				defer wg.Add(-1)
-				for set, rs := range rows {
-					sort.Sort(&rs)
-					shard, err := fs.newShard(set)
-					if err != nil {
-						log.Panic(err)
-					}
-					l := rs.Len()
-					for i := 0; i < l; i++ {
-						cur := rs[i]
-						for j := i + 1; j < l; j++ {
-							next := rs[j]
-							if cur.Key != next.Key {
-								i = j - 1
-								break
-							}
-							i = j
-							if next.UpdateAt() > cur.UpdateAt() {
-								cur = next
-							}
-						}
-						buf.WriteString(cur.String() + "\n")
-					}
-					_, err = shard.f.Write(buf.Bytes())
-					if err != nil {
-						log.Panic(err)
-					}
-					shard.Reset(0)
-					buf.Reset()
+			for set, rs := range rows {
+				sort.Sort(&rs)
+				shard, err := fs.newShard(set)
+				if err != nil {
+					return err
 				}
-			}()
+				l := rs.Len()
+				for i := 0; i < l; i++ {
+					cur := rs[i]
+					for j := i + 1; j < l; j++ {
+						next := rs[j]
+						if cur.Key != next.Key {
+							i = j - 1
+							break
+						}
+						i = j
+						if next.UpdateAt() > cur.UpdateAt() {
+							cur = next
+						}
+					}
+					buf.WriteString(cur.String() + "\n")
+				}
+				_, err = shard.f.Write(buf.Bytes())
+				if err != nil {
+					return err
+				}
+				shard.Reset(0)
+				buf.Reset()
+			}
 		}
 	}
 }
