@@ -166,8 +166,8 @@ func schedule(fs *filesort.FileSorter, set string) error {
 
 	buf := bytes.Buffer{}
 	recordBuf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols))
-	headerLen := buf.Len()
+	header := fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols)
+	buf.WriteString(header)
 
 	log.Infof("table %s_%s start jump\n", t, set)
 	c, err := count(t, set)
@@ -227,6 +227,11 @@ func schedule(fs *filesort.FileSorter, set string) error {
 					eof = true
 					break
 				}
+				if inserted == 1 {
+					buf.Truncate(buf.Len() - 1)
+					buf.WriteByte(';')
+					buf.WriteString(header)
+				}
 				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
 				inserted++
 			}
@@ -249,7 +254,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				}
 				lastPositions = positions
 				lastTotal = total
-				buf.Truncate(headerLen)
+				buf.Truncate(len(header))
 			}
 		}
 		if sqlErr {
