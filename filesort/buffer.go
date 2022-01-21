@@ -84,11 +84,10 @@ func (fb *fileBuffer) NextRow() (*model.Row, error) {
 			if err == io.EOF {
 				buf.eof = true
 			}
-		} else {
-			fb.readTimes++
-			fb.buf.pos = 0
-			fb.buf.cap = dif + capacity
 		}
+		fb.readTimes++
+		fb.buf.pos = 0
+		fb.buf.cap = dif + capacity
 	}
 	start := buf.pos
 	index := 0
