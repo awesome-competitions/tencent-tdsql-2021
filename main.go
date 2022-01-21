@@ -46,6 +46,12 @@ func init() {
 }
 
 func main() {
+	log.Infof("FileBufferSize: %d\n", consts.FileBufferSize)
+	log.Infof("FileSortShardSize: %d\n", consts.FileSortShardSize)
+	log.Infof("InsertBatch: %d\n", consts.InsertBatch)
+	log.Infof("FileSortLimit: %d\n", consts.FileSortLimit)
+	log.Infof("SyncLimit: %d\n", consts.SyncLimit)
+	log.Infof("PreparedBatch: %d\n", consts.PreparedBatch)
 	start := time.Now().UnixNano()
 	_main()
 	fmt.Printf("time-consuming %dms\n", (time.Now().UnixNano()-start)/1e6)
