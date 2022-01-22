@@ -101,16 +101,12 @@ func _main() {
 		}
 	}
 
-	s := time.Now().UnixNano()
-	wg := sync.WaitGroup{}
-	wg.Add(len(fss))
 	go func() {
 		for i := range fss {
 			_ = <-sortLimit
 			fs := fss[i]
 			go func() {
 				defer func() {
-					wg.Add(-1)
 					sortLimit <- true
 				}()
 				if len(fs.Shards()) == 0 {
@@ -130,10 +126,8 @@ func _main() {
 			}()
 		}
 	}()
-	wg.Wait()
-	log.Infof("file sort spend %d\n", (time.Now().UnixNano()-s)/1e6)
 
-	wg = sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	wg.Add(len(fss) * len(db.Sets()))
 	go func() {
 		for {
