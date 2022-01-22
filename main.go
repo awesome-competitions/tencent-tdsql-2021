@@ -214,6 +214,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	lt := fs.InitLts(set)
 	//log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
 	log.Infof("table %s_%s start schedule\n", t, set)
+	st := time.Now().UnixNano()
 	prepared := make(chan model.Sql, consts.PreparedBatch)
 	completed := false
 	sqlErr := false
@@ -295,6 +296,8 @@ func schedule(fs *filesort.FileSorter, set string) error {
 				break
 			}
 			if !sqlErr {
+				et := time.Now().UnixNano()
+				log.Infof("table %s_%s sql prepare time: %d\n", t, set, (et-st)/1e6)
 				_ = t.SetRecovers[set].Make(0, s.Record)
 				//st := time.Now().UnixNano()
 				_, err = conn.ExecContext(ctx, s.Sql)
@@ -307,6 +310,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 						return err
 					}
 				}
+				st = time.Now().UnixNano()
 			}
 		}
 	}
