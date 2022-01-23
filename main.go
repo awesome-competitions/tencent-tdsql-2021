@@ -105,17 +105,9 @@ func _main() {
 		for i := range fss {
 			_ = <-sortLimit
 			fs := fss[i]
-			index := i
 			go func() {
 				defer func() {
 					sortLimit <- true
-					if index == len(fss)-1 {
-						for _, set := range db.Sets() {
-							for i := 0; i < 28; i++ {
-								syncLimits[set] <- true
-							}
-						}
-					}
 				}()
 				if len(fs.Shards()) == 0 {
 					log.Infof("table %s file sort starting\n", fs.Table())
