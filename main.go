@@ -132,14 +132,10 @@ func _main() {
 	go func() {
 		for {
 			task := <-tasks
+			set := task.Set
+			syncLimit := syncLimits[set]
 			go func() {
-				set := task.Set
-				_ = <-syncLimits[set]
-				defer func() {
-					syncLimits[set] <- true
-					wg.Add(-1)
-				}()
-				err := schedule(task.Fs, set)
+				err := schedule(task.Fs, set, &wg, &syncLimit)
 				if err != nil {
 					log.Panic(err)
 				}
@@ -149,7 +145,11 @@ func _main() {
 	wg.Wait()
 }
 
-func schedule(fs *filesort.FileSorter, set string) error {
+func schedule(fs *filesort.FileSorter, set string, wg *sync.WaitGroup, syncLimit *chan bool) error {
+	defer func() {
+		*syncLimit <- true
+		wg.Add(-1)
+	}()
 	t := fs.Table()
 	fg, record, _ := t.SetRecovers[set].Load()
 	if fg == 1 {
@@ -160,7 +160,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, set)
+			return schedule(fs, set, wg, syncLimit)
 		}
 		return err
 	}
@@ -176,7 +176,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		log.Error(err)
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
 			time.Sleep(500 * time.Millisecond)
-			return schedule(fs, set)
+			return schedule(fs, set, wg, syncLimit)
 		}
 		return err
 	}
@@ -281,12 +281,13 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		log.Error(err)
 		return err
 	}
+	_ = <-*syncLimit
 	for !completed {
 		select {
 		case s := <-prepared:
 			if s.Sql == "sqlErr" {
 				time.Sleep(500 * time.Millisecond)
-				return schedule(fs, set)
+				return schedule(fs, set, wg, syncLimit)
 			}
 			if s.Sql == "" {
 				completed = true
@@ -314,7 +315,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 	}
 	if sqlErr {
 		time.Sleep(500 * time.Millisecond)
-		return schedule(fs, set)
+		return schedule(fs, set, wg, syncLimit)
 	}
 	log.Infof("table %s_%s schedule_finished!\n", t, set)
 	return nil
