@@ -106,7 +106,6 @@ func _main() {
 			_ = <-sortLimit
 			fs := fss[i]
 			index := i
-			time.Sleep(500 * time.Millisecond)
 			go func() {
 				defer func() {
 					sortLimit <- true
