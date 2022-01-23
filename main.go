@@ -323,8 +323,7 @@ func schedule(fs *filesort.FileSorter, set string) error {
 		time.Sleep(500 * time.Millisecond)
 		return schedule(fs, set)
 	}
-	total, _ = count(t, set)
-	log.Infof("table %s_%s finished! total %v\n", t, set, total)
+	log.Infof("table %s_%s schedule_finished!\n", t, set)
 	return nil
 }
 
