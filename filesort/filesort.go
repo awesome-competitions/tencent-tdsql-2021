@@ -179,7 +179,7 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 			row, nextErr := source.NextRow()
 			if row != nil {
 				set := fs.table.DB.Hash()[util.MurmurHash2([]byte(row.ID()), 2773)%64]
-				rows[set] = append(rows[set], row)
+				rows[set] = append(rows[set], *row)
 			}
 			if source.pos-lastPos > consts.FileSortShardSize || nextErr != nil {
 				lastPos = source.pos

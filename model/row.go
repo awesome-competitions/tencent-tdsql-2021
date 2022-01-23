@@ -52,11 +52,11 @@ type Row struct {
 	SortID int
 }
 
-func (r Row) Compare(or interface{}) bool {
-	if r.SortID == or.(Row).SortID {
-		return r.Key > or.(Row).Key
+func (r Row) Compare(r1 Row) bool {
+	if r.SortID == r1.SortID {
+		return r.Key > r1.Key
 	}
-	return r.SortID > or.(Row).SortID
+	return r.SortID > r1.SortID
 }
 
 func (r Row) String() string {
@@ -71,18 +71,21 @@ func (r Row) UpdateAt() string {
 	return r.Source[strings.LastIndex(r.Source, ",")+1:]
 }
 
-type Rows []*Row
+type Rows []Row
 
-func (rs *Rows) Len() int {
-	return len(*rs) //
+func (rs Rows) Len() int {
+	return len(rs) //
 }
 
-func (rs *Rows) Less(i, j int) bool {
-	return !(*rs)[i].Compare(*(*rs)[j])
+func (rs Rows) Less(i, j int) bool {
+	if rs[i].SortID == rs[j].SortID {
+		return rs[i].Key < rs[j].Key
+	}
+	return rs[i].SortID < rs[j].SortID
 }
 
-func (rs *Rows) Swap(i, j int) {
-	(*rs)[i], (*rs)[j] = (*rs)[j], (*rs)[i]
+func (rs Rows) Swap(i, j int) {
+	rs[i], rs[j] = rs[j], rs[i]
 }
 
 type Value struct {
