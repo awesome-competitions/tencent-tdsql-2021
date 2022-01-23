@@ -199,7 +199,6 @@ func (fs *FileSorter) shardingSource(source *fileBuffer) error {
 				return nil
 			}
 			for set, rs := range rows {
-				rs = rs[1:]
 				sort.Sort(&rs)
 				shard, err := fs.newShard(set)
 				if err != nil {
