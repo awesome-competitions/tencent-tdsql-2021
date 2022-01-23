@@ -298,10 +298,9 @@ func schedule(fs *filesort.FileSorter, set string, wg *sync.WaitGroup, syncLimit
 			}
 			if !sqlErr {
 				_ = t.SetRecovers[set].Make(0, s.Record)
-				log.Infof("table %s_%s start_exec \n", t, set)
-				st := time.Now().UnixNano()
+				//st := time.Now().UnixNano()
 				_, err = conn.ExecContext(ctx, s.Sql)
-				log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
+				//log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
 				if err != nil {
 					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
 					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
