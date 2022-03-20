@@ -1,0 +1,361 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"flag"
+	"fmt"
+	"github.com/ainilili/tdsql-competition/consts"
+	"github.com/ainilili/tdsql-competition/database"
+	"github.com/ainilili/tdsql-competition/filesort"
+	"github.com/ainilili/tdsql-competition/log"
+	"github.com/ainilili/tdsql-competition/model"
+	"github.com/ainilili/tdsql-competition/parser"
+	"github.com/ainilili/tdsql-competition/util"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+var dataPath *string
+var dstIP *string
+var dstPort *int
+var dstUser *string
+var dstPassword *string
+
+type Task struct {
+	Fs  *filesort.FileSorter
+	Set string
+}
+
+//  example of parameter parse, the final binary should be able to accept specified parameters as requested
+//
+//  usage example:
+//      ./run --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
+//
+//  you can test this example by:
+//  go run main.go --data_path /tmp/data --dst_ip 127.0.0.1 --dst_port 3306 --dst_user root --dst_password 123456789
+func init() {
+	dataPath = flag.String("data_path", "D:\\workspace-tencent\\data", "dir path of source data")
+	dstIP = flag.String("dst_ip", "tdsqlshard-n756r9nq.sql.tencentcdb.com", "ip of dst database address")
+	dstPort = flag.Int("dst_port", 113, "port of dst database address")
+	dstUser = flag.String("dst_user", "nico", "user name of dst database")
+	dstPassword = flag.String("dst_password", "Niconico2021@", "password of dst database")
+	flag.Parse()
+}
+
+func main() {
+	log.Infof("FileBufferSize: %d\n", consts.FileBufferSize)
+	log.Infof("FileSortShardSize: %d\n", consts.FileSortShardSize)
+	log.Infof("InsertBatch: %d\n", consts.InsertBatch)
+	log.Infof("FileSortLimit: %d\n", consts.FileSortLimit)
+	log.Infof("SyncLimit: %d\n", consts.SyncLimit)
+	log.Infof("PreparedBatch: %d\n", consts.PreparedBatch)
+	start := time.Now().UnixNano()
+	_main()
+	fmt.Printf("time-consuming %dms\n", (time.Now().UnixNano()-start)/1e6)
+}
+
+func _main() {
+	db, err := database.New(*dstIP, *dstPort, *dstUser, *dstPassword)
+	if err != nil {
+		log.Panic(err)
+	}
+	tables, err := parser.ParseTables(db, *dataPath)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	tasks := make(chan *Task, 100)
+	sortLimit := make(chan bool, consts.FileSortLimit)
+	syncLimits := map[string]chan bool{}
+	limit := consts.SyncLimit
+	for _, set := range db.Sets() {
+		syncLimits[set] = make(chan bool, 100)
+		for i := 0; i < limit; i++ {
+			syncLimits[set] <- true
+		}
+	}
+	for i := 0; i < cap(sortLimit); i++ {
+		sortLimit <- true
+	}
+	fss := make([]*filesort.FileSorter, 0)
+	for i := range tables {
+		fg, path, err := tables[i].Recover.Load()
+		if err != nil {
+			log.Panic(err)
+		}
+		if fg == 0 {
+			fs, err := filesort.New(tables[i])
+			if err != nil {
+				log.Panic(err)
+			}
+			fss = append(fss, fs)
+		} else if fg == 1 {
+			fs, err := filesort.Recover(tables[i], path)
+			if err != nil {
+				log.Panic(err)
+			}
+			fss = append(fss, fs)
+		}
+	}
+
+	go func() {
+		for i := range fss {
+			_ = <-sortLimit
+			fs := fss[i]
+			go func() {
+				defer func() {
+					sortLimit <- true
+				}()
+				if len(fs.Shards()) == 0 {
+					log.Infof("table %s file sort starting\n", fs.Table())
+					err := fs.Sharding()
+					if err != nil {
+						log.Panic(err)
+					}
+					log.Infof("table %s file sort finished\n", fs.Table())
+				}
+				for set := range fs.Shards() {
+					tasks <- &Task{
+						Fs:  fs,
+						Set: set,
+					}
+				}
+			}()
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(fss) * len(db.Sets()))
+	go func() {
+		for {
+			task := <-tasks
+			go func() {
+				set := task.Set
+				_ = <-syncLimits[set]
+				defer func() {
+					syncLimits[set] <- true
+					wg.Add(-1)
+				}()
+				err := schedule(task.Fs, set)
+				if err != nil {
+					log.Panic(err)
+				}
+			}()
+		}
+	}()
+	wg.Wait()
+}
+
+func schedule(fs *filesort.FileSorter, set string) error {
+	t := fs.Table()
+	fg, record, _ := t.SetRecovers[set].Load()
+	if fg == 1 {
+		return nil
+	}
+	err := initTable(t)
+	if err != nil {
+		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+			time.Sleep(500 * time.Millisecond)
+			return schedule(fs, set)
+		}
+		return err
+	}
+
+	buf := bytes.Buffer{}
+	recordBuf := bytes.Buffer{}
+	header := fmt.Sprintf("/*sets:%s*/ INSERT INTO %s.%s(%s) VALUES ", set, t.Database, t.Name, t.Cols)
+	buf.WriteString(header)
+
+	log.Infof("table %s_%s start jump\n", t, set)
+	c, err := count(t, set)
+	if err != nil {
+		log.Error(err)
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+			time.Sleep(500 * time.Millisecond)
+			return schedule(fs, set)
+		}
+		return err
+	}
+
+	total := 0
+	lastTotal := 0
+	positions := make([]int64, len(fs.Shards()[set]))
+	lastPositions := make([]int64, len(positions))
+	if len(record) > 0 {
+		infos := strings.Split(record, ";")
+		for i, info := range infos {
+			nums := strings.Split(info, ",")
+			n, _ := strconv.ParseInt(nums[0], 10, 64)
+			if i == 0 {
+				total = int(n)
+				for i := 1; i < len(nums); i++ {
+					n, _ = strconv.ParseInt(nums[i], 10, 64)
+					positions[i-1] = n
+				}
+			} else {
+				lastTotal = int(n)
+				for i := 1; i < len(nums); i++ {
+					n, _ = strconv.ParseInt(nums[i], 10, 64)
+					lastPositions[i-1] = n
+				}
+			}
+		}
+	}
+	if c == int(lastTotal) {
+		positions = lastPositions
+		total = lastTotal
+	}
+	lastPositions = positions
+	lastTotal = total
+	fs.ResetPositions(set, positions)
+	lt := fs.InitLts(set)
+	//log.Infof("table %s_%s start schedule, info %s, total %d, start from offset %v\n", t, set, record, total, positions)
+	log.Infof("table %s_%s start schedule\n", t, set)
+	prepared := make(chan model.Sql, consts.PreparedBatch)
+	completed := false
+	sqlErr := false
+	eof := false
+	go func() {
+		for !eof && !sqlErr {
+			inserted := 0
+			for i := 0; i < consts.InsertBatch; i++ {
+				row, err := fs.Next(lt, set)
+				if sqlErr || err != nil {
+					eof = true
+					break
+				}
+				if inserted == 1 {
+					buf.Truncate(buf.Len() - 1)
+					buf.WriteByte(';')
+					buf.WriteString(header)
+				}
+				buf.WriteString(fmt.Sprintf("(%s),", row.String()))
+				inserted++
+			}
+			if !fs.HasNext(lt, set) {
+				eof = true
+			}
+			if inserted > 0 {
+				buf.Truncate(buf.Len() - 1)
+				buf.WriteString(";")
+				total += inserted
+				positions = fs.LastPositions(set)
+
+				recordBuf.Reset()
+				recordBuf.WriteString(fmt.Sprintf("%d,%s;", total, util.JoinInt64(positions, ",")))
+				recordBuf.WriteString(fmt.Sprintf("%d,%s", lastTotal, util.JoinInt64(lastPositions, ",")))
+				prepared <- model.Sql{
+					Sql:      buf.String(),
+					Record:   recordBuf.String(),
+					Finished: eof,
+				}
+				lastPositions = positions
+				lastTotal = total
+				buf.Truncate(len(header))
+			}
+		}
+		if sqlErr {
+			prepared <- model.Sql{
+				Sql: "sqlErr",
+			}
+			return
+		}
+		prepared <- model.Sql{
+			Sql: "",
+		}
+	}()
+
+	ctx := context.Background()
+	conn, _ := t.DB.GetConn(ctx)
+	_, err = conn.ExecContext(ctx, "set @@sql_mode=NO_ENGINE_SUBSTITUTION;")
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf("/*sets:%s*/ set @@sql_mode=NO_ENGINE_SUBSTITUTION;", set))
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	for !completed {
+		select {
+		case s := <-prepared:
+			if s.Sql == "sqlErr" {
+				time.Sleep(500 * time.Millisecond)
+				return schedule(fs, set)
+			}
+			if s.Sql == "" {
+				completed = true
+				if !sqlErr {
+					_ = t.SetRecovers[set].Make(1, s.Record)
+				}
+				break
+			}
+			if !sqlErr {
+				_ = t.SetRecovers[set].Make(0, s.Record)
+				//st := time.Now().UnixNano()
+				_, err = conn.ExecContext(ctx, s.Sql)
+				//log.Infof("table %s_%s exec sql-consuming %dms\n", t, set, (time.Now().UnixNano()-st)/1e6)
+				if err != nil {
+					log.Errorf("table %s_%s sql err: %v\n", t, set, err)
+					if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "Lock wait timeout exceeded") {
+						sqlErr = true
+					} else {
+						return err
+					}
+				}
+			}
+		}
+	}
+	if sqlErr {
+		time.Sleep(500 * time.Millisecond)
+		return schedule(fs, set)
+	}
+	log.Infof("table %s_%s schedule_finished!\n", t, set)
+	return nil
+}
+
+func initTable(t *model.Table) error {
+	_, err := t.DB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_bin';", t.Database))
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	sql := strings.ReplaceAll(t.Schema, "not exists ", fmt.Sprintf("not exists %s.", t.Database))
+	shardKey := ""
+	if len(t.Meta.PrimaryKeys) == 0 {
+		sql = strings.ReplaceAll(sql, ") ENGINE=InnoDB", fmt.Sprintf(",PRIMARY KEY (%s)\n) ENGINE=InnoDB", t.Cols[:strings.LastIndex(t.Cols, ",")]))
+		shardKey = t.Meta.Cols[0]
+	} else {
+		shardKey = t.Meta.PrimaryKeys[0]
+	}
+	sql = strings.ReplaceAll(sql, "ENGINE=InnoDB", "ENGINE=InnoDB shardkey="+shardKey)
+	_, err = t.DB.Exec(sql)
+	if err != nil {
+		log.Error(err)
+		log.Error(sql)
+		return err
+	}
+	return nil
+}
+
+func count(t *model.Table, set string) (int, error) {
+	rows, err := t.DB.Query(fmt.Sprintf("/*sets:%s*/ SELECT count(id) FROM %s.%s as a", set, t.Database, t.Name))
+	if err != nil {
+		log.Error(err)
+		return 0, err
+	}
+	total := 0
+	str := ""
+	for rows.Next() {
+		err = rows.Scan(&total, &str)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return total, nil
+}

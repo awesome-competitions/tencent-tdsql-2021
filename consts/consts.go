@@ -1,8 +1,8 @@
 package consts
 
 const (
-	//Dir = "D:\\workspace-tencent\\tmp1\\"
-	Dir                 = ""
+	Dir = "D:\\workspace-tencent\\tmp1\\"
+	//Dir                 = "/mnt/"
 	LF                  = byte('\n')
 	COMMA               = byte(',')
 	K                   = 1024
